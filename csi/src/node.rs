@@ -10,48 +10,59 @@ impl Node for NodeServer {
         &self,
         _: Request<NodeStageVolumeRequest>,
     ) -> Result<Response<NodeStageVolumeResponse>, Status> {
-        unimplemented!()
+        Err(Status::unimplemented("method not supported"))
     }
     async fn node_unstage_volume(
         &self,
         _: Request<NodeUnstageVolumeRequest>,
     ) -> Result<Response<NodeUnstageVolumeResponse>, Status> {
-        unimplemented!()
+        Err(Status::unimplemented("method not supported"))
     }
     async fn node_publish_volume(
         &self,
-        _: Request<NodePublishVolumeRequest>,
+        request: Request<NodePublishVolumeRequest>,
     ) -> Result<Response<NodePublishVolumeResponse>, Status> {
-        unimplemented!()
+        let request = request.into_inner();
+        // TODO: check volume_capability
+        std::fs::create_dir(request.target_path)?;
+        Ok(Response::new(NodePublishVolumeResponse {}))
     }
     async fn node_unpublish_volume(
         &self,
-        _: Request<NodeUnpublishVolumeRequest>,
+        request: Request<NodeUnpublishVolumeRequest>,
     ) -> Result<Response<NodeUnpublishVolumeResponse>, Status> {
-        unimplemented!()
+        let request = request.into_inner();
+        std::fs::remove_dir_all(request.target_path)?;
+        Ok(Response::new(NodeUnpublishVolumeResponse {}))
     }
     async fn node_get_volume_stats(
         &self,
         _: Request<NodeGetVolumeStatsRequest>,
     ) -> Result<Response<NodeGetVolumeStatsResponse>, Status> {
-        unimplemented!()
+        Err(Status::unimplemented("method not supported"))
     }
     async fn node_expand_volume(
         &self,
         _: Request<NodeExpandVolumeRequest>,
     ) -> Result<Response<NodeExpandVolumeResponse>, Status> {
-        unimplemented!()
+        Err(Status::unimplemented("method not supported"))
     }
     async fn node_get_capabilities(
         &self,
         _: Request<NodeGetCapabilitiesRequest>,
     ) -> Result<Response<NodeGetCapabilitiesResponse>, Status> {
-        unimplemented!()
+        Ok(Response::new(NodeGetCapabilitiesResponse {
+            capabilities: vec![],
+        }))
     }
     async fn node_get_info(
         &self,
         _: Request<NodeGetInfoRequest>,
     ) -> Result<Response<NodeGetInfoResponse>, Status> {
-        unimplemented!()
+        Ok(Response::new(NodeGetInfoResponse {
+            node_id: "".to_string(), // FIXME
+            max_volumes_per_node: 0,
+            accessible_topology: None,
+        }))
     }
 }
