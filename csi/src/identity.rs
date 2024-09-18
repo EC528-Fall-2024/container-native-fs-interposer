@@ -1,5 +1,6 @@
 use crate::csi::v1::identity_server::Identity;
 use crate::csi::v1::*;
+use std::collections::HashMap;
 use tonic::{Request, Response, Status};
 
 pub struct IdentityServer {}
@@ -7,18 +8,24 @@ pub struct IdentityServer {}
 #[tonic::async_trait]
 impl Identity for IdentityServer {
     async fn probe(&self, _: Request<ProbeRequest>) -> Result<Response<ProbeResponse>, Status> {
-        unimplemented!()
+        Ok(Response::new(ProbeResponse { ready: Some(true) }))
     }
     async fn get_plugin_info(
         &self,
         _: Request<GetPluginInfoRequest>,
     ) -> Result<Response<GetPluginInfoResponse>, Status> {
-        unimplemented!()
+        Ok(Response::new(GetPluginInfoResponse {
+            name: "interposer.csi.example.com".to_string(), // TODO: better name
+            vendor_version: env!("CARGO_PKG_VERSION").to_string(),
+            manifest: HashMap::new(),
+        }))
     }
     async fn get_plugin_capabilities(
         &self,
         _: Request<GetPluginCapabilitiesRequest>,
     ) -> Result<Response<GetPluginCapabilitiesResponse>, Status> {
-        unimplemented!()
+        Ok(Response::new(GetPluginCapabilitiesResponse {
+            capabilities: vec![],
+        }))
     }
 }
