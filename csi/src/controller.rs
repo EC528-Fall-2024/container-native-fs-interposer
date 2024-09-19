@@ -3,6 +3,7 @@ use std::{collections::HashMap, sync::Mutex};
 use crate::csi::v1::controller_server::Controller;
 use crate::csi::v1::*;
 use tonic::{Request, Response, Status};
+use validate_volume_capabilities_response::Confirmed;
 
 pub struct ControllerPlugin {
     volumes: Mutex<HashMap<String, Option<CapacityRange>>>,
@@ -50,19 +51,23 @@ impl Controller for ControllerPlugin {
     }
     async fn delete_volume(
         &self,
-        _: Request<DeleteVolumeRequest>,
+        request: Request<DeleteVolumeRequest>,
     ) -> Result<Response<DeleteVolumeResponse>, Status> {
+        let request = request.into_inner();
+        if request.volume_id.is_empty() {
+            return Err(Status::invalid_argument("volume_id is required"));
+        }
         Ok(Response::new(DeleteVolumeResponse {}))
     }
     async fn controller_publish_volume(
         &self,
-        request: Request<ControllerPublishVolumeRequest>,
+        _: Request<ControllerPublishVolumeRequest>,
     ) -> Result<Response<ControllerPublishVolumeResponse>, Status> {
         unimplemented!()
     }
     async fn controller_unpublish_volume(
         &self,
-        request: Request<ControllerUnpublishVolumeRequest>,
+        _: Request<ControllerUnpublishVolumeRequest>,
     ) -> Result<Response<ControllerUnpublishVolumeResponse>, Status> {
         unimplemented!()
     }
@@ -70,17 +75,40 @@ impl Controller for ControllerPlugin {
         &self,
         request: Request<ValidateVolumeCapabilitiesRequest>,
     ) -> Result<Response<ValidateVolumeCapabilitiesResponse>, Status> {
-        unimplemented!()
+        let request = request.into_inner();
+        if request.volume_id.is_empty() {
+            return Err(Status::invalid_argument("volume_id is required"));
+        }
+        if request.volume_capabilities.is_empty() {
+            return Err(Status::invalid_argument("volume_capabilites is required"));
+        }
+        if !self
+            .volumes
+            .lock()
+            .unwrap()
+            .contains_key(&request.volume_id)
+        {
+            return Err(Status::not_found("volume does not exist"));
+        }
+        Ok(Response::new(ValidateVolumeCapabilitiesResponse {
+            confirmed: Some(Confirmed {
+                volume_context: request.volume_context,
+                volume_capabilities: request.volume_capabilities,
+                parameters: request.parameters,
+                mutable_parameters: request.mutable_parameters,
+            }),
+            message: "".to_string(),
+        }))
     }
     async fn list_volumes(
         &self,
-        request: Request<ListVolumesRequest>,
+        _: Request<ListVolumesRequest>,
     ) -> Result<Response<ListVolumesResponse>, Status> {
         unimplemented!()
     }
     async fn get_capacity(
         &self,
-        request: Request<GetCapacityRequest>,
+        _: Request<GetCapacityRequest>,
     ) -> Result<Response<GetCapacityResponse>, Status> {
         unimplemented!()
     }
@@ -100,37 +128,37 @@ impl Controller for ControllerPlugin {
     }
     async fn create_snapshot(
         &self,
-        request: Request<CreateSnapshotRequest>,
+        _: Request<CreateSnapshotRequest>,
     ) -> Result<Response<CreateSnapshotResponse>, Status> {
         unimplemented!()
     }
     async fn delete_snapshot(
         &self,
-        request: Request<DeleteSnapshotRequest>,
+        _: Request<DeleteSnapshotRequest>,
     ) -> Result<Response<DeleteSnapshotResponse>, Status> {
         unimplemented!()
     }
     async fn list_snapshots(
         &self,
-        request: Request<ListSnapshotsRequest>,
+        _: Request<ListSnapshotsRequest>,
     ) -> Result<Response<ListSnapshotsResponse>, Status> {
         unimplemented!()
     }
     async fn controller_expand_volume(
         &self,
-        request: Request<ControllerExpandVolumeRequest>,
+        _: Request<ControllerExpandVolumeRequest>,
     ) -> Result<Response<ControllerExpandVolumeResponse>, Status> {
         unimplemented!()
     }
     async fn controller_get_volume(
         &self,
-        request: Request<ControllerGetVolumeRequest>,
+        _: Request<ControllerGetVolumeRequest>,
     ) -> Result<Response<ControllerGetVolumeResponse>, Status> {
         unimplemented!()
     }
     async fn controller_modify_volume(
         &self,
-        request: Request<ControllerModifyVolumeRequest>,
+        _: Request<ControllerModifyVolumeRequest>,
     ) -> Result<Response<ControllerModifyVolumeResponse>, Status> {
         unimplemented!()
     }

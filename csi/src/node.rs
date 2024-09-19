@@ -34,6 +34,15 @@ impl Node for NodePlugin {
         request: Request<NodePublishVolumeRequest>,
     ) -> Result<Response<NodePublishVolumeResponse>, Status> {
         let request = request.into_inner();
+        if request.volume_id.is_empty() {
+            return Err(Status::invalid_argument("volume_id is required"));
+        }
+        if request.target_path.is_empty() {
+            return Err(Status::invalid_argument("target_path is required"));
+        }
+        if request.volume_capability.is_none() {
+            return Err(Status::invalid_argument("volume_capability is required"));
+        }
         // TODO: check volume_capability
         std::fs::create_dir(request.target_path)?;
         Ok(Response::new(NodePublishVolumeResponse {}))
@@ -43,6 +52,12 @@ impl Node for NodePlugin {
         request: Request<NodeUnpublishVolumeRequest>,
     ) -> Result<Response<NodeUnpublishVolumeResponse>, Status> {
         let request = request.into_inner();
+        if request.volume_id.is_empty() {
+            return Err(Status::invalid_argument("volume_id is required"));
+        }
+        if request.target_path.is_empty() {
+            return Err(Status::invalid_argument("target_path is required"));
+        }
         std::fs::remove_dir_all(request.target_path)?;
         Ok(Response::new(NodeUnpublishVolumeResponse {}))
     }
