@@ -5,4 +5,5 @@ pub mod csi {
 }
 
 pub mod identity;
+pub mod controller;
 pub mod node;
