@@ -2,10 +2,10 @@ use crate::csi::v1::node_server::Node;
 use crate::csi::v1::*;
 use tonic::{Request, Response, Status};
 
-pub struct NodeServer {}
+pub struct NodePlugin {}
 
 #[tonic::async_trait]
-impl Node for NodeServer {
+impl Node for NodePlugin {
     async fn node_stage_volume(
         &self,
         _: Request<NodeStageVolumeRequest>,

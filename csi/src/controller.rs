@@ -2,10 +2,10 @@ use crate::csi::v1::controller_server::Controller;
 use crate::csi::v1::*;
 use tonic::{Request, Response, Status};
 
-pub struct ControllerServer {}
+pub struct ControllerPlugin {}
 
 #[tonic::async_trait]
-impl Controller for ControllerServer {
+impl Controller for ControllerPlugin {
     async fn create_volume(
         &self,
         request: Request<CreateVolumeRequest>,

@@ -3,10 +3,10 @@ use crate::csi::v1::*;
 use std::collections::HashMap;
 use tonic::{Request, Response, Status};
 
-pub struct IdentityServer {}
+pub struct IdentityPlugin {}
 
 #[tonic::async_trait]
-impl Identity for IdentityServer {
+impl Identity for IdentityPlugin {
     async fn probe(&self, _: Request<ProbeRequest>) -> Result<Response<ProbeResponse>, Status> {
         Ok(Response::new(ProbeResponse { ready: Some(true) }))
     }
