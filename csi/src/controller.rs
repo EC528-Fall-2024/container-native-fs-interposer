@@ -1,8 +1,20 @@
+use std::{collections::HashMap, sync::Mutex};
+
 use crate::csi::v1::controller_server::Controller;
 use crate::csi::v1::*;
 use tonic::{Request, Response, Status};
 
-pub struct ControllerPlugin {}
+pub struct ControllerPlugin {
+    volumes: Mutex<HashMap<String, Option<CapacityRange>>>,
+}
+
+impl ControllerPlugin {
+    pub fn new() -> Self {
+        Self {
+            volumes: Mutex::new(HashMap::new()),
+        }
+    }
+}
 
 #[tonic::async_trait]
 impl Controller for ControllerPlugin {
@@ -10,7 +22,22 @@ impl Controller for ControllerPlugin {
         &self,
         request: Request<CreateVolumeRequest>,
     ) -> Result<Response<CreateVolumeResponse>, Status> {
+        let mut volumes = self.volumes.lock().unwrap();
         let request = request.into_inner();
+        if request.name.is_empty() {
+            return Err(Status::invalid_argument("name is required"));
+        }
+        if request.volume_capabilities.is_empty() {
+            return Err(Status::invalid_argument("volume_capabilites is required"));
+        }
+        if let Some(capacity_range) = volumes.get(&request.name) {
+            if *capacity_range != request.capacity_range {
+                return Err(Status::already_exists(
+                    "volume of the same name with different capacity_range already exists",
+                ));
+            }
+        };
+        volumes.insert(request.name.clone(), request.capacity_range);
         Ok(Response::new(CreateVolumeResponse {
             volume: Some(Volume {
                 capacity_bytes: 0,

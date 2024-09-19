@@ -1,8 +1,19 @@
 use crate::csi::v1::node_server::Node;
 use crate::csi::v1::*;
 use tonic::{Request, Response, Status};
+use uuid::Uuid;
 
-pub struct NodePlugin {}
+pub struct NodePlugin {
+    node_id: uuid::Uuid,
+}
+
+impl NodePlugin {
+    pub fn new() -> Self {
+        Self {
+            node_id: Uuid::new_v4(),
+        }
+    }
+}
 
 #[tonic::async_trait]
 impl Node for NodePlugin {
@@ -60,7 +71,7 @@ impl Node for NodePlugin {
         _: Request<NodeGetInfoRequest>,
     ) -> Result<Response<NodeGetInfoResponse>, Status> {
         Ok(Response::new(NodeGetInfoResponse {
-            node_id: "".to_string(), // FIXME
+            node_id: self.node_id.to_string(),
             max_volumes_per_node: 0,
             accessible_topology: None,
         }))
