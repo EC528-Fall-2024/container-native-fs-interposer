@@ -10,13 +10,22 @@ impl Controller for ControllerPlugin {
         &self,
         request: Request<CreateVolumeRequest>,
     ) -> Result<Response<CreateVolumeResponse>, Status> {
-        unimplemented!()
+        let request = request.into_inner();
+        Ok(Response::new(CreateVolumeResponse {
+            volume: Some(Volume {
+                capacity_bytes: 0,
+                volume_id: request.name,
+                volume_context: request.parameters,
+                content_source: None,
+                accessible_topology: vec![],
+            }),
+        }))
     }
     async fn delete_volume(
         &self,
-        request: Request<DeleteVolumeRequest>,
+        _: Request<DeleteVolumeRequest>,
     ) -> Result<Response<DeleteVolumeResponse>, Status> {
-        unimplemented!()
+        Ok(Response::new(DeleteVolumeResponse {}))
     }
     async fn controller_publish_volume(
         &self,
@@ -50,9 +59,17 @@ impl Controller for ControllerPlugin {
     }
     async fn controller_get_capabilities(
         &self,
-        request: Request<ControllerGetCapabilitiesRequest>,
+        _: Request<ControllerGetCapabilitiesRequest>,
     ) -> Result<Response<ControllerGetCapabilitiesResponse>, Status> {
-        unimplemented!()
+        Ok(Response::new(ControllerGetCapabilitiesResponse {
+            capabilities: vec![ControllerServiceCapability {
+                r#type: Some(controller_service_capability::Type::Rpc(
+                    controller_service_capability::Rpc {
+                        r#type: controller_service_capability::rpc::Type::CreateDeleteVolume.into(),
+                    },
+                )),
+            }],
+        }))
     }
     async fn create_snapshot(
         &self,

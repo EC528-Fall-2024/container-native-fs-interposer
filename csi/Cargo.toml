@@ -7,6 +7,7 @@ edition = "2021"
 prost = "0.13.2"
 prost-types = "0.13.2"
 tonic = "0.12.2"
+uuid = { version = "1.10.0", features = ["v4"] }
 
 [build-dependencies]
 tonic-build = "0.12.2"
