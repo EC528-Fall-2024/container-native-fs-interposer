@@ -1,3 +1,5 @@
+use std::env;
+
 use container_native_fs_interposer::{
     controller::ControllerPlugin,
     csi::v1::{
@@ -7,6 +9,8 @@ use container_native_fs_interposer::{
     identity::IdentityPlugin,
     node::NodePlugin,
 };
+use tokio::net::UnixListener;
+use tokio_stream::wrappers::UnixListenerStream;
 use tonic::transport::Server;
 
 #[tokio::main]
@@ -15,7 +19,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .add_service(IdentityServer::new(IdentityPlugin {}))
         .add_service(ControllerServer::new(ControllerPlugin::new()))
         .add_service(NodeServer::new(NodePlugin::new()))
-        .serve("[::1]:10000".parse()?)
+        .serve_with_incoming(UnixListenerStream::new(UnixListener::bind(env::var(
+            "CSI_ENDPOINT",
+        )?)?))
         .await?;
     Ok(())
 }
