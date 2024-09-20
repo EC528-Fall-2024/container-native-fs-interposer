@@ -96,7 +96,7 @@ Applications are now often deployed in container native environments, such as Ku
 <img src="./images/overallDiagram.png" width="50%">
 </p>
 <p align="center">
-CoolTerm wont open on my machine
+General Architecture of Project
 </p>
 
 
