@@ -6,48 +6,44 @@
 **Mentor**: Vasily Tarasov, Alex Merenstein  
 
 ## Project Description
-The goal of this project is to integrate the FUSE library, which provides a mechanism and API for implementing file systems in userspace, natively on containers deployed in Kubernetes, which are often used to deploy cloud-based applications. One application of the FUSE library is to create utility file systems that provide testing applications. 
-
-Our project consists of the following components:
-1) Create a CSI plugin for Kubernetes that allows mounting a stackable FUSE-based file system over another file system
-2) Implement utility FUSE file systems
-3) Run experiments with several data-intensive applications using the CSI plugin and utility FUSE file systems
 
 ## 1.   Vision and Goals Of The Project:
 
-Our project's vision is to allow users to mount file systems with various testing utilities in a Kubernetes application. These utilities include workload tracing, workload metric collection, faulty I/O, throttle I/O, and fake I/O.
+The goal of our project is to integrate FUSE file systems within the container-native environment Kubernetes, which is commonly used for deploying cloud-based applications. By leveraging the FUSE library, which provides the mechanisms and API for implementing file systems in user space, we aim to develop file systems with various testing utilities for Kubernetes applications. These utilities include workload tracing, workload metric collection, faulty I/O, throttle I/O, and fake I/O.
 
 ## 2. Users/Personas Of The Project:
+
+The users of this project is anyone who is developing in or managing a cloud environment and need a file system that evaluates and tests the workload and its performance. 
 
 ### Cluster administrator at MOC - Steven
 
 - Background and Role: Steven is the cluster admin of the MOC Openshift responsible for the performance and reliability of the share file systems.
 
-- Needs and Goals: Steven wants to make sure all the applications running on the cluster still works fine during these monthly maintenances, since there can be degredation in latency/bandwidth during these events. And want to minimize the impact on these applications by choosing the best maintenance windows. 
+- Needs and Goals: Steven wants to make sure all the applications running on the cluster still works fine during these monthly maintenances, since there can be degredation in latency/bandwidth during these events. He wants to minimize the impact on these applications by choosing the best maintenance windows. 
 
-- Challenges: Steven don't have enough visibility into the filesystem access patterns of the applications.
+- Challenges: Steven doesn't have enough visibility into the filesystem access patterns of the applications.
 
 ### Researcher at BU - Nancy
 
-- Background and Role: Nancy is a researcher at BU ECE, her research is on AI.
+- Background and Role: Nancy is a researcher at BU ECE, and her research is on AI.
 
-- Needs and Goals: During the recent training sessions the GPU server she manages is no longer of enough capacity, she is thinking of outsourcing the training to the cloud, but she is worried about the training performance since the storage latency is usually worse on the cloud. She want to confirm the performance numbers before actually signing the contract.
+- Needs and Goals: During the recent training sessions, the GPU server she manages is no longer of enough capacity. She is thinking of outsourcing the training to the cloud but is worried about the training performance since the storage latency is usually worse on the cloud. She wants to confirm the performance numbers before actually signing the contract.
 
-- Challenges: Nancy needs a emulated cloud environment with arbitrarily worse storage performance to test things out.
+- Challenges: Nancy needs an emulated cloud environment with arbitrarily worse storage performance to test things out.
 
 ### Developer at a large business - John
 
-- Background and Role: John is the CTO of a grocery store called missing the target, the company has a website for online ordering.
+- Background and Role: John is the CTO of a grocery store called "Missing the Target". The company has a website for online ordering.
 
-- Needs and Goals: John is worried about the stability of the website in case of filesystem failures because he has been cutting corners and buying second handed hard drives, he want the website to be still accessible during failures, maybe in a degraded mode.
+- Needs and Goals: John is worried about the stability of the website in case of filesystem failures because he has been cutting corners and buying second handed hard drives. He wants the website to still be accessible during failures, maybe in a degraded mode.
 
-- Challenges: He wants to employ the idea of chaos enginnering, and test fault tolerance of the system.
+- Challenges: He wants to employ the idea of chaos enginnering and test fault tolerance of the system.
 
 ** **
 
 ## 3.   Scope and Features Of The Project:
 
-### CSI
+### CSI Plugin
 #### in-scope
 - Node Controller
 - Ephemeral Volumes
@@ -59,7 +55,7 @@ Our project's vision is to allow users to mount file systems with various testin
 
 ### FUSE
 #### in-scope
-- passthru
+- passthrough
 - random fault
 - throttle bandwidth
 - random/fixed delay
@@ -85,32 +81,31 @@ Our project's vision is to allow users to mount file systems with various testin
 
 ## 4. Solution Concept
 
-### Global Architectural Structure Of the Project
+### Global Architectural Structure of the Project
 
-FUSE library provides a mechanism and an API for implementing full-fledged file systems in user space, which makes developing a new file system significantly easier and safer compared to kernel based file systems. This also enables quick development of various “utility” file systems that layer on top of other file systems to add new functionalities.  For example, a file system that injects random errors to evaluate applications’ error handling, a file system that logs activity for later analysis or playback, or a file system that throttles I/O operations for quality of service (QoS) purposes or reducing the load on backend.
-
-Applications are now often deployed in container native environments, such as Kubernetes.  In Kubernetes, storage is provided to workloads (“pods”) via volumes (“persistent volumes, PVs”) that are usually formatted with a file system such as ext4 or xfs.  To use a FUSE-based stackable utility file system with these volumes and workloads, some integration with Kubernetes is required, e.g. a special CSI plugin.
-
+The following diagram shows the general architecture of our project. The upper half of the diagram represents the user space, while the lower half represents the kernel space. The architecture demonstrates the integration of two systems, FUSE and Kubernetes, through a CSI plugin.
 
 <p align="center">
 <img src="./images/overallDiagram.png" width="50%">
 </p>
 <p align="center">
-General Architecture of Project
+Diagram 1: General Architecture of Project
 </p>
 
+The FUSE library provides a mechanism and an API for implementing full-fledged file systems in user space, which makes developing a new file system significantly easier and safer compared to kernel based file systems. This also enables quick development of various “utility” file systems that layer on top of other file systems to add new functionalities.  For example, a file system that injects random errors to evaluate applications’ error handling, a file system that logs activity for later analysis or playback, or a file system that throttles I/O operations for quality of service (QoS) purposes or reducing the load on backend. The diagram above illustrates a request (i.e., system call) from userspace to the virtual file system (VFS) and subsequently the FUSE kernel module. FUSE then forwards these IO requests to the handler, which is our utility FUSE implementation. 
 
+Applications are now often deployed in container native environments, such as Kubernetes.  In Kubernetes, storage is provided to workloads (“pods”) via volumes (“persistent volumes, PVs”) that are usually formatted with a file system such as ext4 or xfs.  To use a FUSE-based stackable utility file system with these volumes and workloads, some integration with Kubernetes is required. As shown in the diagram, this integration will be implemented by a CSI node plugin.
 
-### Design Implications and Discussion
+### Design Discussion
 
-1. FUSE itself may introduce too much noise/overhead.
-2. CSI filesystems stacking would be a nice addition.
+1. FUSE itself may introduce too much noise/overhead. This will be evaluated by running expriments with data-intensive applications.
+2. CSI filesystems stacking would be a nice addition, if time allows.
 
 ## 5. Acceptance criteria
 
-1. Create a new CSI plugin for Kubernetes that allows users to mount a stackable FUSE-based file system over another file system. Many open-source CSI plugins exist and can be used as a reference. CSI plugins are usually implemented using Go language.
+1. Create a new CSI plugin for Kubernetes that allows users to mount a stackable FUSE-based file system over another file system.
 
-2. Implement one or more (depending on the student group size) utility FUSE file systems (basing them on existing passthrough) that do: workload tracing, workload metric collection, faulty I/O, throttle I/O, fake IO. The details of each file system will be discussed with the mentors.
+2. Implement utility FUSE file systems that provide workload tracing, workload metric collection, faulty I/O, throttle I/O, and fake IO.
 
 3. Run experiments with several data-intensive applications using the 2 technologies above. Perform descriptive analysis of applications’ behavior when a utility file system is used.
 
@@ -135,10 +130,11 @@ Artifacts:
 
 2. Sprint 2
 - Create scaffold for the CSI plugin
-- Mount the passthrough FUSE filesystem.
+- Mount the passthrough FUSE filesystem
 
 3. Sprint 3
-Implement new utility FUSE filesystems for throttling/fault injection/etc., integrate the FUSE filesystems with CSI.
+- Implement new utility FUSE filesystems for throttling/fault injection/etc.
+- Integrate the FUSE filesystems with CSI
 
 4. Sprint 4
 - Implement tracing and metrics with OTEL
