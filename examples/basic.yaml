@@ -1,0 +1,16 @@
+kind: Pod
+apiVersion: v1
+metadata:
+  name: basic
+spec:
+  containers:
+    - name: busybox
+      image: busybox:latest
+      command: [ "sleep", "inf" ]
+      volumeMounts:
+      - mountPath: "/interposer"
+        name: interposer-volume
+  volumes:
+    - name: interposer-volume
+      csi:
+        driver: interposer.csi.example.com
