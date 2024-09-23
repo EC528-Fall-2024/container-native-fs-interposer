@@ -12,52 +12,47 @@
  * This file system mirrors the existing file system hierarchy of the
  * system, starting at the root file system. This is implemented by
  * just "passing through" all requests to the corresponding user-space
- * libc functions. Its performance is terrible.
+ * libc functions. This implementation is a little more sophisticated
+ * than the one in passthrough.c, so performance is not quite as bad.
  *
- * Compile with
+ * Compile with:
  *
- *     gcc -Wall passthrough.c `pkg-config fuse3 --cflags --libs` -o passthrough
+ *     gcc -Wall passthrough_fh.c `pkg-config fuse3 --cflags --libs` -lulockmgr -o passthrough_fh
  *
  * ## Source code ##
- * \include passthrough.c
+ * \include passthrough_fh.c
  */
-
 
 #define FUSE_USE_VERSION 31
 
 #define _GNU_SOURCE
 
-#ifdef linux
-/* For pread()/pwrite()/utimensat() */
-#define _XOPEN_SOURCE 700
+#include <fuse.h>
+
+#ifdef HAVE_LIBULOCKMGR
+#include <ulockmgr.h>
 #endif
 
-#include <fuse.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <dirent.h>
 #include <errno.h>
-#ifdef __FreeBSD__
-#include <sys/socket.h>
-#include <sys/un.h>
-#endif
 #include <sys/time.h>
 #ifdef HAVE_SETXATTR
 #include <sys/xattr.h>
 #endif
-
-#include "passthrough_helpers.h"
-
-static int fill_dir_plus = 0;
+#include <sys/file.h> /* flock(2) */
 
 static void *xmp_init(struct fuse_conn_info *conn,
 		      struct fuse_config *cfg)
 {
 	(void) conn;
 	cfg->use_ino = 1;
+	cfg->nullpath_ok = 1;
 
 	/* Pick up changes from lower filesystem right away. This is
 	   also necessary for better hardlink support. When the kernel
@@ -74,12 +69,16 @@ static void *xmp_init(struct fuse_conn_info *conn,
 }
 
 static int xmp_getattr(const char *path, struct stat *stbuf,
-		       struct fuse_file_info *fi)
+			struct fuse_file_info *fi)
 {
-	(void) fi;
 	int res;
 
-	res = lstat(path, stbuf);
+	(void) path;
+
+	if(fi)
+		res = fstat(fi->fh, stbuf);
+	else
+		res = lstat(path, stbuf);
 	if (res == -1)
 		return -errno;
 
@@ -109,32 +108,104 @@ static int xmp_readlink(const char *path, char *buf, size_t size)
 	return 0;
 }
 
+struct xmp_dirp {
+	DIR *dp;
+	struct dirent *entry;
+	off_t offset;
+};
+
+static int xmp_opendir(const char *path, struct fuse_file_info *fi)
+{
+	int res;
+	struct xmp_dirp *d = malloc(sizeof(struct xmp_dirp));
+	if (d == NULL)
+		return -ENOMEM;
+
+	d->dp = opendir(path);
+	if (d->dp == NULL) {
+		res = -errno;
+		free(d);
+		return res;
+	}
+	d->offset = 0;
+	d->entry = NULL;
+
+	fi->fh = (unsigned long) d;
+	return 0;
+}
+
+static inline struct xmp_dirp *get_dirp(struct fuse_file_info *fi)
+{
+	return (struct xmp_dirp *) (uintptr_t) fi->fh;
+}
 
 static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		       off_t offset, struct fuse_file_info *fi,
 		       enum fuse_readdir_flags flags)
 {
-	DIR *dp;
-	struct dirent *de;
+	struct xmp_dirp *d = get_dirp(fi);
 
-	(void) offset;
-	(void) fi;
-	(void) flags;
-
-	dp = opendir(path);
-	if (dp == NULL)
-		return -errno;
-
-	while ((de = readdir(dp)) != NULL) {
+	(void) path;
+	if (offset != d->offset) {
+#ifndef __FreeBSD__
+		seekdir(d->dp, offset);
+#else
+		/* Subtract the one that we add when calling
+		   telldir() below */
+		seekdir(d->dp, offset-1);
+#endif
+		d->entry = NULL;
+		d->offset = offset;
+	}
+	while (1) {
 		struct stat st;
-		memset(&st, 0, sizeof(st));
-		st.st_ino = de->d_ino;
-		st.st_mode = de->d_type << 12;
-		if (filler(buf, de->d_name, &st, 0, fill_dir_plus))
+		off_t nextoff;
+		enum fuse_fill_dir_flags fill_flags = 0;
+
+		if (!d->entry) {
+			d->entry = readdir(d->dp);
+			if (!d->entry)
+				break;
+		}
+#ifdef HAVE_FSTATAT
+		if (flags & FUSE_READDIR_PLUS) {
+			int res;
+
+			res = fstatat(dirfd(d->dp), d->entry->d_name, &st,
+				      AT_SYMLINK_NOFOLLOW);
+			if (res != -1)
+				fill_flags |= FUSE_FILL_DIR_PLUS;
+		}
+#endif
+		if (!(fill_flags & FUSE_FILL_DIR_PLUS)) {
+			memset(&st, 0, sizeof(st));
+			st.st_ino = d->entry->d_ino;
+			st.st_mode = d->entry->d_type << 12;
+		}
+		nextoff = telldir(d->dp);
+#ifdef __FreeBSD__		
+		/* Under FreeBSD, telldir() may return 0 the first time
+		   it is called. But for libfuse, an offset of zero
+		   means that offsets are not supported, so we shift
+		   everything by one. */
+		nextoff++;
+#endif
+		if (filler(buf, d->entry->d_name, &st, nextoff, fill_flags))
 			break;
+
+		d->entry = NULL;
+		d->offset = nextoff;
 	}
 
-	closedir(dp);
+	return 0;
+}
+
+static int xmp_releasedir(const char *path, struct fuse_file_info *fi)
+{
+	struct xmp_dirp *d = get_dirp(fi);
+	(void) path;
+	closedir(d->dp);
+	free(d);
 	return 0;
 }
 
@@ -142,7 +213,10 @@ static int xmp_mknod(const char *path, mode_t mode, dev_t rdev)
 {
 	int res;
 
-	res = mknod_wrapper(AT_FDCWD, path, NULL, mode, rdev);
+	if (S_ISFIFO(mode))
+		res = mkfifo(path, mode);
+	else
+		res = mknod(path, mode, rdev);
 	if (res == -1)
 		return -errno;
 
@@ -197,6 +271,7 @@ static int xmp_rename(const char *from, const char *to, unsigned int flags)
 {
 	int res;
 
+	/* When we have renameat2() in libc, then we can implement flags */
 	if (flags)
 		return -EINVAL;
 
@@ -221,10 +296,12 @@ static int xmp_link(const char *from, const char *to)
 static int xmp_chmod(const char *path, mode_t mode,
 		     struct fuse_file_info *fi)
 {
-	(void) fi;
 	int res;
 
-	res = chmod(path, mode);
+	if(fi)
+		res = fchmod(fi->fh, mode);
+	else
+		res = chmod(path, mode);
 	if (res == -1)
 		return -errno;
 
@@ -234,10 +311,12 @@ static int xmp_chmod(const char *path, mode_t mode,
 static int xmp_chown(const char *path, uid_t uid, gid_t gid,
 		     struct fuse_file_info *fi)
 {
-	(void) fi;
 	int res;
 
-	res = lchown(path, uid, gid);
+	if (fi)
+		res = fchown(fi->fh, uid, gid);
+	else
+		res = lchown(path, uid, gid);
 	if (res == -1)
 		return -errno;
 
@@ -245,14 +324,15 @@ static int xmp_chown(const char *path, uid_t uid, gid_t gid,
 }
 
 static int xmp_truncate(const char *path, off_t size,
-			struct fuse_file_info *fi)
+			 struct fuse_file_info *fi)
 {
 	int res;
 
-	if (fi != NULL)
+	if(fi)
 		res = ftruncate(fi->fh, size);
 	else
 		res = truncate(path, size);
+
 	if (res == -1)
 		return -errno;
 
@@ -263,11 +343,13 @@ static int xmp_truncate(const char *path, off_t size,
 static int xmp_utimens(const char *path, const struct timespec ts[2],
 		       struct fuse_file_info *fi)
 {
-	(void) fi;
 	int res;
 
 	/* don't use utime/utimes since they follow symlinks */
-	res = utimensat(0, path, ts, AT_SYMLINK_NOFOLLOW);
+	if (fi)
+		res = futimens(fi->fh, ts);
+	else
+		res = utimensat(0, path, ts, AT_SYMLINK_NOFOLLOW);
 	if (res == -1)
 		return -errno;
 
@@ -275,76 +357,90 @@ static int xmp_utimens(const char *path, const struct timespec ts[2],
 }
 #endif
 
-static int xmp_create(const char *path, mode_t mode,
-		      struct fuse_file_info *fi)
+static int xmp_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 {
-	int res;
+	int fd;
 
-	res = open(path, fi->flags, mode);
-	if (res == -1)
+	fd = open(path, fi->flags, mode);
+	if (fd == -1)
 		return -errno;
 
-	fi->fh = res;
+	fi->fh = fd;
 	return 0;
 }
 
 static int xmp_open(const char *path, struct fuse_file_info *fi)
 {
-	int res;
+	int fd;
 
-	res = open(path, fi->flags);
-	if (res == -1)
+	fd = open(path, fi->flags);
+	if (fd == -1)
 		return -errno;
 
-	fi->fh = res;
+	fi->fh = fd;
 	return 0;
 }
 
 static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
 		    struct fuse_file_info *fi)
 {
-	int fd;
 	int res;
 
-	if(fi == NULL)
-		fd = open(path, O_RDONLY);
-	else
-		fd = fi->fh;
-	
-	if (fd == -1)
-		return -errno;
-
-	res = pread(fd, buf, size, offset);
+	(void) path;
+	res = pread(fi->fh, buf, size, offset);
 	if (res == -1)
 		res = -errno;
 
-	if(fi == NULL)
-		close(fd);
 	return res;
+}
+
+static int xmp_read_buf(const char *path, struct fuse_bufvec **bufp,
+			size_t size, off_t offset, struct fuse_file_info *fi)
+{
+	struct fuse_bufvec *src;
+
+	(void) path;
+
+	src = malloc(sizeof(struct fuse_bufvec));
+	if (src == NULL)
+		return -ENOMEM;
+
+	*src = FUSE_BUFVEC_INIT(size);
+
+	src->buf[0].flags = FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK;
+	src->buf[0].fd = fi->fh;
+	src->buf[0].pos = offset;
+
+	*bufp = src;
+
+	return 0;
 }
 
 static int xmp_write(const char *path, const char *buf, size_t size,
 		     off_t offset, struct fuse_file_info *fi)
 {
-	int fd;
 	int res;
 
-	(void) fi;
-	if(fi == NULL)
-		fd = open(path, O_WRONLY);
-	else
-		fd = fi->fh;
-	
-	if (fd == -1)
-		return -errno;
-
-	res = pwrite(fd, buf, size, offset);
+	(void) path;
+	res = pwrite(fi->fh, buf, size, offset);
 	if (res == -1)
 		res = -errno;
 
-	if(fi == NULL)
-		close(fd);
 	return res;
+}
+
+static int xmp_write_buf(const char *path, struct fuse_bufvec *buf,
+		     off_t offset, struct fuse_file_info *fi)
+{
+	struct fuse_bufvec dst = FUSE_BUFVEC_INIT(fuse_buf_size(buf));
+
+	(void) path;
+
+	dst.buf[0].flags = FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK;
+	dst.buf[0].fd = fi->fh;
+	dst.buf[0].pos = offset;
+
+	return fuse_buf_copy(&dst, buf, FUSE_BUF_SPLICE_NONBLOCK);
 }
 
 static int xmp_statfs(const char *path, struct statvfs *stbuf)
@@ -358,22 +454,48 @@ static int xmp_statfs(const char *path, struct statvfs *stbuf)
 	return 0;
 }
 
+static int xmp_flush(const char *path, struct fuse_file_info *fi)
+{
+	int res;
+
+	(void) path;
+	/* This is called from every close on an open file, so call the
+	   close on the underlying filesystem.	But since flush may be
+	   called multiple times for an open file, this must not really
+	   close the file.  This is important if used on a network
+	   filesystem like NFS which flush the data/metadata on close() */
+	res = close(dup(fi->fh));
+	if (res == -1)
+		return -errno;
+
+	return 0;
+}
+
 static int xmp_release(const char *path, struct fuse_file_info *fi)
 {
 	(void) path;
 	close(fi->fh);
+
 	return 0;
 }
 
 static int xmp_fsync(const char *path, int isdatasync,
 		     struct fuse_file_info *fi)
 {
-	/* Just a stub.	 This method is optional and can safely be left
-	   unimplemented */
-
+	int res;
 	(void) path;
+
+#ifndef HAVE_FDATASYNC
 	(void) isdatasync;
-	(void) fi;
+#else
+	if (isdatasync)
+		res = fdatasync(fi->fh);
+	else
+#endif
+		res = fsync(fi->fh);
+	if (res == -1)
+		return -errno;
+
 	return 0;
 }
 
@@ -381,27 +503,12 @@ static int xmp_fsync(const char *path, int isdatasync,
 static int xmp_fallocate(const char *path, int mode,
 			off_t offset, off_t length, struct fuse_file_info *fi)
 {
-	int fd;
-	int res;
-
-	(void) fi;
+	(void) path;
 
 	if (mode)
 		return -EOPNOTSUPP;
 
-	if(fi == NULL)
-		fd = open(path, O_WRONLY);
-	else
-		fd = fi->fh;
-	
-	if (fd == -1)
-		return -errno;
-
-	res = -posix_fallocate(fd, offset, length);
-
-	if(fi == NULL)
-		close(fd);
-	return res;
+	return -posix_fallocate(fi->fh, offset, length);
 }
 #endif
 
@@ -442,43 +549,44 @@ static int xmp_removexattr(const char *path, const char *name)
 }
 #endif /* HAVE_SETXATTR */
 
+#ifdef HAVE_LIBULOCKMGR
+static int xmp_lock(const char *path, struct fuse_file_info *fi, int cmd,
+		    struct flock *lock)
+{
+	(void) path;
+
+	return ulockmgr_op(fi->fh, cmd, lock, &fi->lock_owner,
+			   sizeof(fi->lock_owner));
+}
+#endif
+
+static int xmp_flock(const char *path, struct fuse_file_info *fi, int op)
+{
+	int res;
+	(void) path;
+
+	res = flock(fi->fh, op);
+	if (res == -1)
+		return -errno;
+
+	return 0;
+}
+
 #ifdef HAVE_COPY_FILE_RANGE
 static ssize_t xmp_copy_file_range(const char *path_in,
 				   struct fuse_file_info *fi_in,
-				   off_t offset_in, const char *path_out,
+				   off_t off_in, const char *path_out,
 				   struct fuse_file_info *fi_out,
-				   off_t offset_out, size_t len, int flags)
+				   off_t off_out, size_t len, int flags)
 {
-	int fd_in, fd_out;
 	ssize_t res;
+	(void) path_in;
+	(void) path_out;
 
-	if(fi_in == NULL)
-		fd_in = open(path_in, O_RDONLY);
-	else
-		fd_in = fi_in->fh;
-
-	if (fd_in == -1)
-		return -errno;
-
-	if(fi_out == NULL)
-		fd_out = open(path_out, O_WRONLY);
-	else
-		fd_out = fi_out->fh;
-
-	if (fd_out == -1) {
-		close(fd_in);
-		return -errno;
-	}
-
-	res = copy_file_range(fd_in, &offset_in, fd_out, &offset_out, len,
+	res = copy_file_range(fi_in->fh, &off_in, fi_out->fh, &off_out, len,
 			      flags);
 	if (res == -1)
-		res = -errno;
-
-	if (fi_out == NULL)
-		close(fd_out);
-	if (fi_in == NULL)
-		close(fd_in);
+		return -errno;
 
 	return res;
 }
@@ -486,23 +594,13 @@ static ssize_t xmp_copy_file_range(const char *path_in,
 
 static off_t xmp_lseek(const char *path, off_t off, int whence, struct fuse_file_info *fi)
 {
-	int fd;
 	off_t res;
+	(void) path;
 
-	if (fi == NULL)
-		fd = open(path, O_RDONLY);
-	else
-		fd = fi->fh;
-
-	if (fd == -1)
+	res = lseek(fi->fh, off, whence);
+	if (res == -1)
 		return -errno;
 
-	res = lseek(fd, off, whence);
-	if (res == -1)
-		res = -errno;
-
-	if (fi == NULL)
-		close(fd);
 	return res;
 }
 
@@ -511,7 +609,9 @@ static const struct fuse_operations xmp_oper = {
 	.getattr	= xmp_getattr,
 	.access		= xmp_access,
 	.readlink	= xmp_readlink,
+	.opendir	= xmp_opendir,
 	.readdir	= xmp_readdir,
+	.releasedir	= xmp_releasedir,
 	.mknod		= xmp_mknod,
 	.mkdir		= xmp_mkdir,
 	.symlink	= xmp_symlink,
@@ -525,11 +625,14 @@ static const struct fuse_operations xmp_oper = {
 #ifdef HAVE_UTIMENSAT
 	.utimens	= xmp_utimens,
 #endif
+	.create		= xmp_create,
 	.open		= xmp_open,
-	.create 	= xmp_create,
 	.read		= xmp_read,
+	.read_buf	= xmp_read_buf,
 	.write		= xmp_write,
+	.write_buf	= xmp_write_buf,
 	.statfs		= xmp_statfs,
+	.flush		= xmp_flush,
 	.release	= xmp_release,
 	.fsync		= xmp_fsync,
 #ifdef HAVE_POSIX_FALLOCATE
@@ -541,6 +644,10 @@ static const struct fuse_operations xmp_oper = {
 	.listxattr	= xmp_listxattr,
 	.removexattr	= xmp_removexattr,
 #endif
+#ifdef HAVE_LIBULOCKMGR
+	.lock		= xmp_lock,
+#endif
+	.flock		= xmp_flock,
 #ifdef HAVE_COPY_FILE_RANGE
 	.copy_file_range = xmp_copy_file_range,
 #endif
@@ -549,18 +656,6 @@ static const struct fuse_operations xmp_oper = {
 
 int main(int argc, char *argv[])
 {
-	enum { MAX_ARGS = 10 };
-	int i,new_argc;
-	char *new_argv[MAX_ARGS];
-
 	umask(0);
-			/* Process the "--plus" option apart */
-	for (i=0, new_argc=0; (i<argc) && (new_argc<MAX_ARGS); i++) {
-		if (!strcmp(argv[i], "--plus")) {
-			fill_dir_plus = FUSE_FILL_DIR_PLUS;
-		} else {
-			new_argv[new_argc++] = argv[i];
-		}
-	}
-	return fuse_main(new_argc, new_argv, &xmp_oper, NULL);
+	return fuse_main(argc, argv, &xmp_oper, NULL);
 }
