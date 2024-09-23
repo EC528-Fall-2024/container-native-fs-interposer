@@ -1,0 +1,12 @@
+[package]
+name = "container-native-fs-interposer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+prost = "0.13.2"
+prost-types = "0.13.2"
+tonic = "0.12.2"
+
+[build-dependencies]
+tonic-build = "0.12.2"
