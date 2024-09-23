@@ -1,0 +1,33 @@
+name: E2E test
+
+on:
+  push:
+
+jobs:
+  basic-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: kind
+      - name: Build CSI plugin image
+        run: |
+          nix build .#csi-node -vL
+      - name: Load CSI plugin image into kind
+        run: |
+          kind load image-archive <(./result)
+      - name: Apply CSI plugin manifests
+        run: |
+          kubectl apply -k deploy
+      - name: Apply CSI example manifests
+        run: |
+          kubectl apply -k examples
+      - name: Wait for test pod to be ready
+        run: |
+          kubectl wait --for=condition=Ready pod/basic
+      - name: Cleanup CSI example manifests
+        run: |
+          kubectl delete -k examples
