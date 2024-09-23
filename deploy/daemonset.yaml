@@ -1,0 +1,86 @@
+# Reference: https://github.com/kubernetes-csi/csi-driver-host-path/blob/a785248f2709f55ed461e3da6c59d39152dace41/deploy/kubernetes-1.27/hostpath/csi-hostpath-plugin.yaml
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: csi-interposer
+  labels:
+    app.kubernetes.io/instance: interposer.csi.example.com
+    app.kubernetes.io/part-of: csi-driver-interposer
+    app.kubernetes.io/name: csi-interposer
+    app.kubernetes.io/component: plugin
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: interposer.csi.example.com
+      app.kubernetes.io/part-of: csi-driver-interposer
+      app.kubernetes.io/name: csi-interposer
+      app.kubernetes.io/component: plugin
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: interposer.csi.example.com
+        app.kubernetes.io/part-of: csi-driver-interposer
+        app.kubernetes.io/name: csi-interposer
+        app.kubernetes.io/component: plugin
+    spec:
+      containers:
+        - name: node-driver-registrar
+          image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.12.0
+          args:
+            - --v=5
+            - --csi-address=/csi/csi.sock
+            - --kubelet-registration-path=/var/lib/kubelet/plugins/csi-interposer/csi.sock
+          securityContext:
+            privileged: true
+          volumeMounts:
+          - mountPath: /csi
+            name: socket-dir
+          - mountPath: /registration
+            name: registration-dir
+
+        - name: interposer
+          image: docker.io/library/csi-node:latest
+          imagePullPolicy: "IfNotPresent"
+          args:
+          env:
+            - name: CSI_ENDPOINT
+              value: /csi/csi.sock
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+            - mountPath: /var/lib/kubelet/pods
+              mountPropagation: Bidirectional
+              name: mountpoint-dir
+            - mountPath: /var/lib/kubelet/plugins
+              mountPropagation: Bidirectional
+              name: plugins-dir
+            - mountPath: /dev
+              name: dev-dir
+      volumes:
+        - hostPath:
+            path: /var/lib/kubelet/plugins/csi-interposer
+            type: DirectoryOrCreate
+          name: socket-dir
+        - hostPath:
+            path: /var/lib/kubelet/pods
+            type: DirectoryOrCreate
+          name: mountpoint-dir
+        - hostPath:
+            path: /var/lib/kubelet/plugins_registry
+            type: Directory
+          name: registration-dir
+        - hostPath:
+            path: /var/lib/kubelet/plugins
+            type: Directory
+          name: plugins-dir
+        - hostPath:
+            path: /dev
+            type: Directory
+          name: dev-dir
