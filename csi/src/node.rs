@@ -1,5 +1,6 @@
 use crate::csi::v1::node_server::Node;
 use crate::csi::v1::*;
+use std::io::ErrorKind;
 use tonic::{Request, Response, Status};
 
 pub struct NodeService {
@@ -30,15 +31,22 @@ impl Node for NodeService {
     }
     async fn node_publish_volume(
         &self,
-        _: Request<NodePublishVolumeRequest>,
+        request: Request<NodePublishVolumeRequest>,
     ) -> Result<Response<NodePublishVolumeResponse>, Status> {
-        Err(Status::unimplemented("method not supported"))
+        let request = request.into_inner();
+        match std::fs::create_dir(request.target_path) {
+            Err(err) if err.kind() == ErrorKind::AlreadyExists => (),
+            result => result?,
+        };
+        Ok(Response::new(NodePublishVolumeResponse {}))
     }
     async fn node_unpublish_volume(
         &self,
-        _: Request<NodeUnpublishVolumeRequest>,
+        request: Request<NodeUnpublishVolumeRequest>,
     ) -> Result<Response<NodeUnpublishVolumeResponse>, Status> {
-        Err(Status::unimplemented("method not supported"))
+        let request = request.into_inner();
+        std::fs::remove_dir_all(request.target_path)?;
+        Ok(Response::new(NodeUnpublishVolumeResponse {}))
     }
     async fn node_get_volume_stats(
         &self,
