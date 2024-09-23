@@ -20,8 +20,21 @@
         csi-node = dockerTools.streamLayeredImage {
           name = "csi-node";
           tag = "latest";
-          contents = [ csi ];
+          contents = [
+            csi
+            passthrough
+          ];
           config.Entrypoint = [ "/bin/csi-node" ];
+        };
+        passthrough = stdenv.mkDerivation {
+          name = "passthrough";
+          src = ./fuse/passthrough;
+          nativeBuildInputs = [
+            meson
+            ninja
+            pkg-config
+          ];
+          buildInputs = [ fuse3 ];
         };
       };
     };

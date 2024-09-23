@@ -7,4 +7,5 @@ executable(
     'passthrough.c',
     'passthrough_helpers.h',
     dependencies: [fuse],
+    install : true,
 )
