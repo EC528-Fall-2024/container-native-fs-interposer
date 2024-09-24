@@ -9,18 +9,9 @@ This folder contains implementations of utility FUSE file systems with the follo
 4) Throttle I/O  
 5) Fake I/O
 
-### Install and set up fuse
+### Installation
 
-1) Install dependencies  
-sudo apt update  
-sudo apt install fuse libfuse-dev  
-
-Depending on your environment, you may need to install these packages:  
-sudo apt install build-essential pkg-config kmod  
-
-2) Load FUSE kernel module    
-modprobe fuse  
-
-3) Compile passthrough example  
-gcc -Wall passthrough.c -o passthrough -D_FILE_OFFSET_BITS=64 -I/usr/include/fuse -lfuse -pthread
-
+1) Install [libfuse](https://github.com/libfuse/libfuse)  
+2) cd container-native-fs-interposer/fuse/passthrough/  
+3) Set up build directory: meson setup build  
+4) Build the project: meson compile -C build
