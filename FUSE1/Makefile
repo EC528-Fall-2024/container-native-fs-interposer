@@ -1,13 +1,21 @@
-CC = g++
-CFLAGS = -c -g -Werror 
+CC := gcc
+CFLAGS := -g -Wall -Werror
+LDFLAGS := -lfuse3
 
-.PHONY : FUSE_ll
+TARGET := FUSE_ll
 
-FUSE_ll: FUSE_ll.o 
-	$(CC) FUSE_ll.o -lfuse3 -o FUSE_ll
+SRC := FUSE_ll.c
+OBJ := $(SRC:.c=.o)
 
-FUSE_ll.o: FUSE_ll.cpp
-	$(CC) $(CFLAGS) FUSE_ll.cpp 
+.PHONY: all clean
 
-clean: 
-	rm -f *.o FUSE_ll
+all: $(TARGET)
+
+$(TARGET): $(OBJ)
+	$(CC) $^ $(LDFLAGS) -o $@
+
+%.o: %.c passthrough_helper.h
+	$(CC) $(CFLAGS) -c $< -o $@
+
+clean:
+	rm -rf $(OBJ) $(TARGET)
