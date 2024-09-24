@@ -1,4 +1,4 @@
-CC = gcc
+CC = g++
 CFLAGS = -c -g -Werror 
 
 .PHONY : FUSE_ll
