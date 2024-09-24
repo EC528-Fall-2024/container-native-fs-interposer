@@ -1,6 +1,7 @@
 use crate::csi::v1::node_server::Node;
 use crate::csi::v1::*;
-use std::io::ErrorKind;
+use nix::mount::MntFlags;
+use std::{io::ErrorKind, path::Path, process::Command};
 use tonic::{Request, Response, Status};
 
 pub struct NodeService {
@@ -34,10 +35,16 @@ impl Node for NodeService {
         request: Request<NodePublishVolumeRequest>,
     ) -> Result<Response<NodePublishVolumeResponse>, Status> {
         let request = request.into_inner();
-        match std::fs::create_dir(request.target_path) {
+        match std::fs::create_dir(&request.target_path) {
             Err(err) if err.kind() == ErrorKind::AlreadyExists => (),
             result => result?,
         };
+
+        // FIXME: check if a filesystem is already mounted
+        Command::new("passthrough")
+            .args([&request.target_path])
+            .spawn()?;
+
         Ok(Response::new(NodePublishVolumeResponse {}))
     }
     async fn node_unpublish_volume(
@@ -45,6 +52,11 @@ impl Node for NodeService {
         request: Request<NodeUnpublishVolumeRequest>,
     ) -> Result<Response<NodeUnpublishVolumeResponse>, Status> {
         let request = request.into_inner();
+
+        // FIXME: cleanup the fuse process
+        nix::mount::umount2(Path::new(&request.target_path), MntFlags::empty())
+            .map_err(|err| Status::internal(err.to_string()))?;
+
         std::fs::remove_dir_all(request.target_path)?;
         Ok(Response::new(NodeUnpublishVolumeResponse {}))
     }
