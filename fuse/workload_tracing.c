@@ -8,21 +8,20 @@
 #include <stdio.h>
 #include "passthrough/passthrough.h"
 
-static int read(const char *path, char *buf, size_t size, off_t offset,
+static int tracing_read(const char *path, char *buf, size_t size, off_t offset,
             	struct fuse_file_info *fi) {
-	FILE *file = fopen("output.txt", "w");
-	fprintf(file, "HERE!");
+	FILE *file = fopen("/tmp/output.txt", "w");
+	fprintf(file, "Path: %s", path);
+	fclose(file);
 	return xmp_read(path, buf, size, offset, fi);
 }
-
 
 // Workload tracing
 int main(int argc, char *argv[])
 {
+	// Replace function operations specific to workload tracing
 	struct fuse_operations tracing_file_op = xmp_oper;
-	//memcpy(&xmp_oper, &tracing_file_op, sizeof xmp_oper);
-	tracing_file_op.read = read;
-
+	tracing_file_op.read = tracing_read;
 
 	enum { MAX_ARGS = 10 };
 	int i,new_argc;
