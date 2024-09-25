@@ -1,4 +1,4 @@
-## Utility FUSE File Systems
+# Utility FUSE File Systems
 
 The FUSE (Filesystem in Userspace) library provides a mechanism for implementing and mounting file systems in user space (as opposed to the kernel space). One application of FUSE is to easily develop utility file systems that act as a wrapper around and extends the functionalities of an underlying file system.  
 
@@ -9,9 +9,17 @@ This folder contains implementations of utility FUSE file systems with the follo
 4) Throttle I/O  
 5) Fake I/O
 
-### Installation
+## Installation
 
 1) Install [libfuse](https://github.com/libfuse/libfuse)  
-2) cd container-native-fs-interposer/fuse/passthrough/  
+2) cd container-native-fs-interposer/fuse/  
 3) Set up build directory: meson setup build  
 4) Build the project: meson compile -C build
+
+## Running file system  
+
+1) cd container-native-fs-interposer/fuse/build    
+2) mkdir /tmp/test-fuse-fs   
+2) Run the file system: ./basic-passthrough /tmp/test-fuse-fs  
+4) Use mounted file system: cd /tmp/test-fuse-fs  
+3) Unmount file system: fusermount -u /tmp/test-fuse-fs  
