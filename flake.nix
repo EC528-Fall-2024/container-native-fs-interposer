@@ -22,13 +22,13 @@
           tag = "latest";
           contents = [
             csi
-            passthrough
+            interposer
           ];
           config.Entrypoint = [ "/bin/csi-node" ];
         };
-        passthrough = stdenv.mkDerivation {
-          name = "passthrough";
-          src = ./fuse/passthrough;
+        interposer = stdenv.mkDerivation {
+          name = "interposer";
+          src = ./fuse;
           nativeBuildInputs = [
             meson
             ninja

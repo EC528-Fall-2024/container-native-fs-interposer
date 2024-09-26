@@ -41,7 +41,7 @@ impl Node for NodeService {
         };
 
         // FIXME: check if a filesystem is already mounted
-        Command::new("passthrough")
+        Command::new("basic_passthrough")
             .args([&request.target_path])
             .spawn()?;
 
