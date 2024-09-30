@@ -17,9 +17,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     Server::builder()
         .add_service(IdentityServer::new(IdentityService {}))
-        .add_service(NodeServer::new(NodeService::new(&env::var(
-            "KUBE_NODE_NAME",
-        )?)))
+        .add_service(NodeServer::new(
+            NodeService::new(&env::var("KUBE_NODE_NAME")?).await,
+        ))
         .serve_with_incoming(UnixListenerStream::new(UnixListener::bind(&path)?))
         .await?;
     Ok(())

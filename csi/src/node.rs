@@ -1,16 +1,21 @@
 use crate::csi::v1::node_server::Node;
 use crate::csi::v1::*;
+use k8s_openapi::api::core::v1::Pod;
+use kube::{Api, Client};
 use nix::mount::MntFlags;
 use std::{io::ErrorKind, path::Path, process::Command};
 use tonic::{Request, Response, Status};
 
 pub struct NodeService {
+    client: Client,
     node_id: String,
 }
 
 impl NodeService {
-    pub fn new(node_id: &str) -> Self {
+    pub async fn new(node_id: &str) -> Self {
+        let client = Client::try_default().await.unwrap();
         Self {
+            client,
             node_id: node_id.to_string(),
         }
     }
@@ -35,6 +40,19 @@ impl Node for NodeService {
         request: Request<NodePublishVolumeRequest>,
     ) -> Result<Response<NodePublishVolumeResponse>, Status> {
         let request = request.into_inner();
+
+        let pod_namespace = request
+            .volume_context
+            .get("csi.storage.k8s.io/pod.namespace")
+            .unwrap();
+        let pod_name = request
+            .volume_context
+            .get("csi.storage.k8s.io/pod.name")
+            .unwrap();
+
+        let pods: Api<Pod> = Api::namespaced(self.client.clone(), &pod_namespace);
+        let _ = pods.get(&pod_name).await;
+
         match std::fs::create_dir(&request.target_path) {
             Err(err) if err.kind() == ErrorKind::AlreadyExists => (),
             result => result?,
