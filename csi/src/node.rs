@@ -1,16 +1,35 @@
 use crate::csi::v1::node_server::Node;
 use crate::csi::v1::*;
+use k8s_openapi::api::core::v1::EmptyDirVolumeSource;
+use k8s_openapi::{
+    api::core::v1::{
+        Affinity, Container, HostPathVolumeSource, Pod, PodAffinity, PodAffinityTerm, PodSpec,
+        SecurityContext, Volume, VolumeMount,
+    },
+    apimachinery::pkg::apis::meta::v1::LabelSelector,
+};
+use kube::runtime::conditions;
+use kube::runtime::wait::await_condition;
+use kube::{
+    api::{ObjectMeta, PartialObjectMetaExt, Patch, PatchParams, PostParams},
+    Api, Client,
+};
+use kube::{Resource, ResourceExt};
 use nix::mount::MntFlags;
-use std::{io::ErrorKind, path::Path, process::Command};
+use std::{collections::BTreeMap, io::ErrorKind, path::Path};
 use tonic::{Request, Response, Status};
+use uuid::Uuid;
 
 pub struct NodeService {
+    client: Client,
     node_id: String,
 }
 
 impl NodeService {
-    pub fn new(node_id: &str) -> Self {
+    pub async fn new(node_id: &str) -> Self {
+        let client = Client::try_default().await.unwrap();
         Self {
+            client,
             node_id: node_id.to_string(),
         }
     }
@@ -35,15 +54,137 @@ impl Node for NodeService {
         request: Request<NodePublishVolumeRequest>,
     ) -> Result<Response<NodePublishVolumeResponse>, Status> {
         let request = request.into_inner();
+
+        let pod_namespace = request
+            .volume_context
+            .get("csi.storage.k8s.io/pod.namespace")
+            .unwrap();
+        let pod_name = request
+            .volume_context
+            .get("csi.storage.k8s.io/pod.name")
+            .unwrap();
+
+        let pods: Api<Pod> = Api::namespaced(self.client.clone(), pod_namespace);
+        let labels: BTreeMap<String, String> = [(
+            "interposer.csi.example.com/affinity".to_string(),
+            Uuid::new_v4().to_string(),
+        )]
+        .into();
+        pods.patch_metadata(
+            pod_name,
+            &PatchParams::default(),
+            &Patch::Merge(
+                &ObjectMeta {
+                    labels: Some(labels.clone()),
+                    ..Default::default()
+                }
+                .into_request_partial::<Pod>(),
+            ),
+        )
+        .await
+        .unwrap();
+        let pod = pods.get(pod_name).await.unwrap();
+
         match std::fs::create_dir(&request.target_path) {
             Err(err) if err.kind() == ErrorKind::AlreadyExists => (),
             result => result?,
         };
 
-        // FIXME: check if a filesystem is already mounted
-        Command::new("basic_passthrough")
-            .args([&request.target_path])
-            .spawn()?;
+        let interposer_pod = pods
+            .create(
+                &PostParams::default(),
+                &Pod {
+                    metadata: ObjectMeta {
+                        name: Some(format!("{}-interposer", pod_name)),
+                        namespace: Some(pod_namespace.to_string()),
+                        owner_references: Some(pod.owner_ref(&()).into_iter().collect()),
+                        ..Default::default()
+                    },
+                    spec: Some(PodSpec {
+                        affinity: Some(Affinity {
+                            pod_affinity: Some(PodAffinity {
+                                required_during_scheduling_ignored_during_execution: Some(vec![
+                                    PodAffinityTerm {
+                                        label_selector: Some(LabelSelector {
+                                            match_labels: Some(labels),
+                                            ..Default::default()
+                                        }),
+                                        namespaces: Some(vec![pod_namespace.to_string()]),
+                                        topology_key: "kubernetes.io/hostname".to_string(),
+                                        ..Default::default()
+                                    },
+                                ]),
+                                ..Default::default()
+                            }),
+                            ..Default::default()
+                        }),
+                        containers: vec![Container {
+                            command: Some(vec![
+                                "basic_passthrough".to_string(),
+                                "-d".to_string(),
+                                request.target_path.clone(),
+                            ]),
+                            image: Some("docker.io/library/csi-node:latest".to_string()),
+                            image_pull_policy: Some("IfNotPresent".to_string()),
+                            name: "interposer".to_string(),
+                            security_context: Some(SecurityContext {
+                                privileged: Some(true),
+                                ..Default::default()
+                            }),
+                            volume_mounts: Some(vec![
+                                VolumeMount {
+                                    mount_path: "/var/lib/kubelet/pods".to_string(),
+                                    mount_propagation: Some("Bidirectional".to_string()),
+                                    name: "mountpoint-dir".to_string(),
+                                    ..Default::default()
+                                },
+                                VolumeMount {
+                                    mount_path: "/dev".to_string(),
+                                    name: "dev-dir".to_string(),
+                                    ..Default::default()
+                                },
+                            ]),
+                            ..Default::default()
+                        }],
+                        volumes: Some(vec![
+                            Volume {
+                                host_path: Some(HostPathVolumeSource {
+                                    path: "/var/lib/kubelet/pods".to_string(),
+                                    type_: Some("DirectoryOrCreate".to_string()),
+                                }),
+                                name: "mountpoint-dir".to_string(),
+                                ..Default::default()
+                            },
+                            Volume {
+                                host_path: Some(HostPathVolumeSource {
+                                    path: "/dev".to_string(),
+                                    type_: Some("Directory".to_string()),
+                                }),
+                                name: "dev-dir".to_string(),
+                                ..Default::default()
+                            },
+                            Volume {
+                                // TODO: use persistentVolumeClaim
+                                empty_dir: Some(EmptyDirVolumeSource::default()),
+                                name: "lowerdir".to_string(),
+                                ..Default::default()
+                            },
+                        ]),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+
+        await_condition(
+            pods,
+            &interposer_pod.name_unchecked(),
+            conditions::is_pod_running(),
+        )
+        .await
+        .unwrap();
 
         Ok(Response::new(NodePublishVolumeResponse {}))
     }
