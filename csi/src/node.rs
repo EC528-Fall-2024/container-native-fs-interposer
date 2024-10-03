@@ -1,6 +1,6 @@
 use crate::csi::v1::node_server::Node;
 use crate::csi::v1::*;
-use k8s_openapi::api::core::v1::EmptyDirVolumeSource;
+use k8s_openapi::api::core::v1::PersistentVolumeClaimVolumeSource;
 use k8s_openapi::api::core::v1::{
     Container, HostPathVolumeSource, Pod, PodSpec, SecurityContext, Volume, VolumeMount,
 };
@@ -60,6 +60,15 @@ impl Node for NodeService {
             .get("csi.storage.k8s.io/pod.name")
             .unwrap();
 
+        let pvc = match request.volume_context.get("persistentVolumeClaimName") {
+            Some(v) => v,
+            None => {
+                return Err(Status::invalid_argument(
+                    "missing persistentVolumeClaimName in volumeAttributes",
+                ))
+            }
+        };
+
         let pods: Api<Pod> = Api::namespaced(self.client.clone(), pod_namespace);
 
         let pod = pods.get(pod_name).await.unwrap();
@@ -80,7 +89,14 @@ impl Node for NodeService {
                         ..Default::default()
                     },
                     spec: Some(PodSpec {
-                        node_name: Some(env::var("KUBE_NODE_NAME").unwrap()),
+                        node_selector: Some(
+                            [(
+                                "kubernetes.io/hostname".to_string(),
+                                // FIXME: hostname might not equal node name
+                                env::var("KUBE_NODE_NAME").unwrap().to_string(),
+                            )]
+                            .into(),
+                        ),
                         restart_policy: Some("Never".to_string()),
                         containers: vec![Container {
                             command: Some(vec![
@@ -107,6 +123,11 @@ impl Node for NodeService {
                                     name: "dev-dir".to_string(),
                                     ..Default::default()
                                 },
+                                VolumeMount {
+                                    mount_path: "/lowerdir".to_string(),
+                                    name: "lowerdir".to_string(),
+                                    ..Default::default()
+                                },
                             ]),
                             ..Default::default()
                         }],
@@ -128,8 +149,10 @@ impl Node for NodeService {
                                 ..Default::default()
                             },
                             Volume {
-                                // TODO: use persistentVolumeClaim
-                                empty_dir: Some(EmptyDirVolumeSource::default()),
+                                persistent_volume_claim: Some(PersistentVolumeClaimVolumeSource {
+                                    claim_name: pvc.to_string(),
+                                    ..Default::default()
+                                }),
                                 name: "lowerdir".to_string(),
                                 ..Default::default()
                             },
