@@ -1,24 +1,20 @@
 use crate::csi::v1::node_server::Node;
 use crate::csi::v1::*;
 use k8s_openapi::api::core::v1::EmptyDirVolumeSource;
-use k8s_openapi::{
-    api::core::v1::{
-        Affinity, Container, HostPathVolumeSource, Pod, PodAffinity, PodAffinityTerm, PodSpec,
-        SecurityContext, Volume, VolumeMount,
-    },
-    apimachinery::pkg::apis::meta::v1::LabelSelector,
+use k8s_openapi::api::core::v1::{
+    Container, HostPathVolumeSource, Pod, PodSpec, SecurityContext, Volume, VolumeMount,
 };
 use kube::runtime::conditions;
 use kube::runtime::wait::await_condition;
 use kube::{
-    api::{ObjectMeta, PartialObjectMetaExt, Patch, PatchParams, PostParams},
+    api::{ObjectMeta, PostParams},
     Api, Client,
 };
 use kube::{Resource, ResourceExt};
 use nix::mount::MntFlags;
-use std::{collections::BTreeMap, io::ErrorKind, path::Path};
+use std::env;
+use std::{io::ErrorKind, path::Path};
 use tonic::{Request, Response, Status};
-use uuid::Uuid;
 
 pub struct NodeService {
     client: Client,
@@ -65,24 +61,7 @@ impl Node for NodeService {
             .unwrap();
 
         let pods: Api<Pod> = Api::namespaced(self.client.clone(), pod_namespace);
-        let labels: BTreeMap<String, String> = [(
-            "interposer.csi.example.com/affinity".to_string(),
-            Uuid::new_v4().to_string(),
-        )]
-        .into();
-        pods.patch_metadata(
-            pod_name,
-            &PatchParams::default(),
-            &Patch::Merge(
-                &ObjectMeta {
-                    labels: Some(labels.clone()),
-                    ..Default::default()
-                }
-                .into_request_partial::<Pod>(),
-            ),
-        )
-        .await
-        .unwrap();
+
         let pod = pods.get(pod_name).await.unwrap();
 
         match std::fs::create_dir(&request.target_path) {
@@ -101,23 +80,8 @@ impl Node for NodeService {
                         ..Default::default()
                     },
                     spec: Some(PodSpec {
-                        affinity: Some(Affinity {
-                            pod_affinity: Some(PodAffinity {
-                                required_during_scheduling_ignored_during_execution: Some(vec![
-                                    PodAffinityTerm {
-                                        label_selector: Some(LabelSelector {
-                                            match_labels: Some(labels),
-                                            ..Default::default()
-                                        }),
-                                        namespaces: Some(vec![pod_namespace.to_string()]),
-                                        topology_key: "kubernetes.io/hostname".to_string(),
-                                        ..Default::default()
-                                    },
-                                ]),
-                                ..Default::default()
-                            }),
-                            ..Default::default()
-                        }),
+                        node_name: Some(env::var("KUBE_NODE_NAME").unwrap()),
+                        restart_policy: Some("Never".to_string()),
                         containers: vec![Container {
                             command: Some(vec![
                                 "basic_passthrough".to_string(),
