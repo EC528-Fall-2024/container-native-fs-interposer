@@ -25,9 +25,10 @@ jobs:
       - name: Apply CSI example manifests
         run: |
           kubectl apply -k examples
-      - name: Wait for test pod to be ready
+      - name: Wait for test job to be ready
         run: |
-          kubectl wait --for=condition=Ready pod/basic
+          kubectl wait jobs/minio --for=condition=complete --timeout=300s
+          kubectl logs jobs/minio
       - name: Cleanup CSI example manifests
         run: |
           kubectl delete -k examples
