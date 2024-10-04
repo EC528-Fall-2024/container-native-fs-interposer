@@ -22,10 +22,13 @@ jobs:
       - name: Apply CSI plugin manifests
         run: |
           kubectl apply -k deploy
+      - name: Wait for daemonset to rollout
+        run: |
+          kubectl -n csi-interposer rollout status daemonset csi-interposer
       - name: Apply CSI example manifests
         run: |
           kubectl apply -k examples
-      - name: Wait for test job to be ready
+      - name: Wait for test job to complete
         run: |
           kubectl wait jobs/minio --for=condition=complete --timeout=600s
           kubectl logs jobs/minio
