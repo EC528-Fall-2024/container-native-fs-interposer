@@ -9,6 +9,15 @@ metadata:
     app.kubernetes.io/name: csi-interposer
     app.kubernetes.io/component: serviceaccount
 ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: csi-interposer-role
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["*"]
+---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
@@ -21,7 +30,7 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: cluster-admin
+  name: csi-interposer-role
 subjects:
 - kind: ServiceAccount
   name: csi-interposer-sa
@@ -90,8 +99,6 @@ spec:
             - mountPath: /var/lib/kubelet/plugins
               mountPropagation: Bidirectional
               name: plugins-dir
-            - mountPath: /dev
-              name: dev-dir
       volumes:
         - hostPath:
             path: /var/lib/kubelet/plugins/csi-interposer
@@ -109,7 +116,3 @@ spec:
             path: /var/lib/kubelet/plugins
             type: Directory
           name: plugins-dir
-        - hostPath:
-            path: /dev
-            type: Directory
-          name: dev-dir
