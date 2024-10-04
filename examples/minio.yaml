@@ -1,0 +1,53 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: minio-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+kind: Job
+apiVersion: batch/v1
+metadata:
+  name: minio
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      initContainers:
+        - name: minio
+          image: quay.io/minio/minio:latest
+          args: [ "server", "/data" ]
+          restartPolicy: Always
+          startupProbe:
+            httpGet:
+              path: /minio/health/ready
+              port: 9000
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+          volumeMounts:
+            - mountPath: "/data"
+              name: data
+      containers:
+        - name: warp
+          image: quay.io/minio/warp:latest
+          args:
+            - mixed
+            - --access-key=minioadmin
+            - --secret-key=minioadmin
+            - --autoterm
+            - --objects=100
+      volumes:
+        - name: data
+          csi:
+            driver: interposer.csi.example.com
+            volumeAttributes:
+              persistentVolumeClaimName: minio-pvc
