@@ -29,6 +29,100 @@ impl NodeService {
             node_id: node_id.to_string(),
         }
     }
+    pub fn new_interposer(
+        &self,
+        pod: &Pod,
+        request: &NodePublishVolumeRequest,
+    ) -> Result<Pod, Status> {
+        let claim = request
+            .volume_context
+            .get("persistentVolumeClaimName")
+            .ok_or(Status::invalid_argument(
+                "missing persistentVolumeClaimName in volumeAttributes",
+            ))?;
+
+        Ok(Pod {
+            metadata: ObjectMeta {
+                // FIXME: avoid name collision when multiple interposer volumes are mounted
+                name: Some(format!("{}-interposer", pod.name_unchecked())),
+                namespace: pod.namespace(),
+                owner_references: Some(pod.owner_ref(&()).into_iter().collect()),
+                ..Default::default()
+            },
+            spec: Some(PodSpec {
+                node_selector: Some(
+                    [(
+                        "kubernetes.io/hostname".to_string(),
+                        // FIXME: hostname might not equal node name
+                        env::var("KUBE_NODE_NAME").unwrap().to_string(),
+                    )]
+                    .into(),
+                ),
+                restart_policy: Some("Never".to_string()),
+                containers: vec![Container {
+                    command: Some(vec![
+                        "basic_passthrough".to_string(),
+                        "-d".to_string(),
+                        request.target_path.clone(),
+                    ]),
+                    image: Some("docker.io/library/csi-node:latest".to_string()),
+                    image_pull_policy: Some("IfNotPresent".to_string()),
+                    name: "interposer".to_string(),
+                    security_context: Some(SecurityContext {
+                        privileged: Some(true),
+                        ..Default::default()
+                    }),
+                    volume_mounts: Some(vec![
+                        VolumeMount {
+                            mount_path: "/var/lib/kubelet/pods".to_string(),
+                            mount_propagation: Some("Bidirectional".to_string()),
+                            name: "mountpoint-dir".to_string(),
+                            ..Default::default()
+                        },
+                        VolumeMount {
+                            mount_path: "/dev".to_string(),
+                            name: "dev-dir".to_string(),
+                            ..Default::default()
+                        },
+                        VolumeMount {
+                            mount_path: "/lowerdir".to_string(),
+                            name: "lowerdir".to_string(),
+                            ..Default::default()
+                        },
+                    ]),
+                    ..Default::default()
+                }],
+                volumes: Some(vec![
+                    Volume {
+                        host_path: Some(HostPathVolumeSource {
+                            path: "/var/lib/kubelet/pods".to_string(),
+                            type_: Some("DirectoryOrCreate".to_string()),
+                        }),
+                        name: "mountpoint-dir".to_string(),
+                        ..Default::default()
+                    },
+                    Volume {
+                        host_path: Some(HostPathVolumeSource {
+                            path: "/dev".to_string(),
+                            type_: Some("Directory".to_string()),
+                        }),
+                        name: "dev-dir".to_string(),
+                        ..Default::default()
+                    },
+                    Volume {
+                        persistent_volume_claim: Some(PersistentVolumeClaimVolumeSource {
+                            claim_name: claim.to_string(),
+                            ..Default::default()
+                        }),
+                        name: "lowerdir".to_string(),
+                        ..Default::default()
+                    },
+                ]),
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
+    }
 }
 
 #[tonic::async_trait]
@@ -60,15 +154,6 @@ impl Node for NodeService {
             .get("csi.storage.k8s.io/pod.name")
             .unwrap();
 
-        let pvc = match request.volume_context.get("persistentVolumeClaimName") {
-            Some(v) => v,
-            None => {
-                return Err(Status::invalid_argument(
-                    "missing persistentVolumeClaimName in volumeAttributes",
-                ))
-            }
-        };
-
         let pods: Api<Pod> = Api::namespaced(self.client.clone(), pod_namespace);
 
         let pod = pods.get(pod_name).await.unwrap();
@@ -81,86 +166,7 @@ impl Node for NodeService {
         let interposer_pod = pods
             .create(
                 &PostParams::default(),
-                &Pod {
-                    metadata: ObjectMeta {
-                        name: Some(format!("{}-interposer", pod_name)),
-                        namespace: Some(pod_namespace.to_string()),
-                        owner_references: Some(pod.owner_ref(&()).into_iter().collect()),
-                        ..Default::default()
-                    },
-                    spec: Some(PodSpec {
-                        node_selector: Some(
-                            [(
-                                "kubernetes.io/hostname".to_string(),
-                                // FIXME: hostname might not equal node name
-                                env::var("KUBE_NODE_NAME").unwrap().to_string(),
-                            )]
-                            .into(),
-                        ),
-                        restart_policy: Some("Never".to_string()),
-                        containers: vec![Container {
-                            command: Some(vec![
-                                "basic_passthrough".to_string(),
-                                "-d".to_string(),
-                                request.target_path.clone(),
-                            ]),
-                            image: Some("docker.io/library/csi-node:latest".to_string()),
-                            image_pull_policy: Some("IfNotPresent".to_string()),
-                            name: "interposer".to_string(),
-                            security_context: Some(SecurityContext {
-                                privileged: Some(true),
-                                ..Default::default()
-                            }),
-                            volume_mounts: Some(vec![
-                                VolumeMount {
-                                    mount_path: "/var/lib/kubelet/pods".to_string(),
-                                    mount_propagation: Some("Bidirectional".to_string()),
-                                    name: "mountpoint-dir".to_string(),
-                                    ..Default::default()
-                                },
-                                VolumeMount {
-                                    mount_path: "/dev".to_string(),
-                                    name: "dev-dir".to_string(),
-                                    ..Default::default()
-                                },
-                                VolumeMount {
-                                    mount_path: "/lowerdir".to_string(),
-                                    name: "lowerdir".to_string(),
-                                    ..Default::default()
-                                },
-                            ]),
-                            ..Default::default()
-                        }],
-                        volumes: Some(vec![
-                            Volume {
-                                host_path: Some(HostPathVolumeSource {
-                                    path: "/var/lib/kubelet/pods".to_string(),
-                                    type_: Some("DirectoryOrCreate".to_string()),
-                                }),
-                                name: "mountpoint-dir".to_string(),
-                                ..Default::default()
-                            },
-                            Volume {
-                                host_path: Some(HostPathVolumeSource {
-                                    path: "/dev".to_string(),
-                                    type_: Some("Directory".to_string()),
-                                }),
-                                name: "dev-dir".to_string(),
-                                ..Default::default()
-                            },
-                            Volume {
-                                persistent_volume_claim: Some(PersistentVolumeClaimVolumeSource {
-                                    claim_name: pvc.to_string(),
-                                    ..Default::default()
-                                }),
-                                name: "lowerdir".to_string(),
-                                ..Default::default()
-                            },
-                        ]),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                },
+                &self.new_interposer(&pod, &request)?,
             )
             .await
             .unwrap();
