@@ -131,7 +131,7 @@ int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		memset(&st, 0, sizeof(st));
 		st.st_ino = de->d_ino;
 		st.st_mode = de->d_type << 12;
-		if (filler(buf, de->d_name, &st, 0, fill_dir_plus))
+		if (filler(buf, de->d_name, &st, 0, static_cast<fuse_fill_dir_flags>(fill_dir_plus)))
 			break;
 	}
 
@@ -508,6 +508,48 @@ off_t xmp_lseek(const char *path, off_t off, int whence, struct fuse_file_info *
 }
 
 const struct fuse_operations xmp_oper = {
+	.getattr	= xmp_getattr,
+	.readlink	= xmp_readlink,
+	.mknod		= xmp_mknod,
+	.mkdir		= xmp_mkdir,
+	.unlink		= xmp_unlink,
+	.rmdir		= xmp_rmdir,
+	.symlink	= xmp_symlink,
+	.rename		= xmp_rename,
+	.link		= xmp_link,
+	.chmod		= xmp_chmod,
+	.chown		= xmp_chown,
+	.truncate	= xmp_truncate,
+	.open		= xmp_open,
+	.read		= xmp_read,
+	.write		= xmp_write,
+	.statfs		= xmp_statfs,
+	.release	= xmp_release,
+	.fsync		= xmp_fsync,
+#ifdef HAVE_SETXATTR
+	.setxattr	= xmp_setxattr,
+	.getxattr	= xmp_getxattr,
+	.listxattr	= xmp_listxattr,
+	.removexattr	= xmp_removexattr,
+#endif
+	.readdir	= xmp_readdir,
+	.init		= xmp_init,
+	.access		= xmp_access,
+	.create		= xmp_create,
+#ifdef HAVE_UTIMENSAT
+	.utimens	= xmp_utimens,
+#endif
+#ifdef HAVE_POSIX_FALLOCATE
+	.fallocate	= xmp_fallocate,
+#endif
+#ifdef HAVE_COPY_FILE_RANGE
+	.copy_file_range = xmp_copy_file_range,
+#endif
+	.lseek		= xmp_lseek,
+};
+
+/*
+const struct fuse_operations xmp_oper = {
 	.init           = xmp_init,
 	.getattr	= xmp_getattr,
 	.access		= xmp_access,
@@ -546,4 +588,4 @@ const struct fuse_operations xmp_oper = {
 	.copy_file_range = xmp_copy_file_range,
 #endif
 	.lseek		= xmp_lseek,
-};
+};*/

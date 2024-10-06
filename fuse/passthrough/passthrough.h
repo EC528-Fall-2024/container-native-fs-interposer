@@ -1,6 +1,10 @@
 #ifndef PASSTHROUGH_H
 #define PASSTHROUGH_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define FUSE_USE_VERSION 31
 
 #include <fuse.h>
@@ -95,5 +99,9 @@ ssize_t xmp_copy_file_range(const char *path_in,
 off_t xmp_lseek(const char *path, off_t off, int whence, struct fuse_file_info *fi);
 
 extern const struct fuse_operations xmp_oper;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // PASSTHROUGH_H
