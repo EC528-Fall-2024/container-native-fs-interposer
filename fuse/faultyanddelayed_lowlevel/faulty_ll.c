@@ -6,7 +6,7 @@
 	I also created a helper function to write to a log that will track when these errors have occured, so that we have a concrete artifact to compare against that documented all the errors
 
 	gcc -Wall -D_FILE_OFFSET_BITS=64 passthrough_ll.c `pkg-config fuse3 --cflags --libs` -o passthrough_ll
-	docker build --platform linux/arm64/v8 -t my-fuse-app .
+	docker build -t my-fuse-app .
 	kubectl apply -f fuse-faulty.yaml
 	kubectl get pods
 	kubectl logs fuse-faulty

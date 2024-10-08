@@ -58,9 +58,10 @@ COPY . /usr/src/myapp
 # Change working directory
 WORKDIR /usr/src/myapp
 
+#name executable and run it 
 # Build the FUSE application (if applicable)
-RUN gcc -o my_fuse_app faulty_ll.c -lfuse
+RUN gcc -o my_fuse_app test.c -lfuse
 
 # Run the FUSE application when the container starts
-CMD ["./my_fuse_app"]
+CMD ["./my_fuse_app"] 
 
