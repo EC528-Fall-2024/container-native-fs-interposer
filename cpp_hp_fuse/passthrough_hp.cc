@@ -43,6 +43,12 @@
  * \include passthrough_hp.cc
  */
 
+#include <cstdint>
+#include <memory>
+#include <bits/types/sigevent_t.h>
+#include <bits/types/struct_itimerspec.h>
+#include <ctime>
+#include <stdexcept>
 #define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 12)
 
 #ifndef _GNU_SOURCE
@@ -64,6 +70,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <limits.h>
+#include <signal.h>
 
 // C++ includes
 #include <cstddef>
@@ -75,6 +82,15 @@
 #include <fstream>
 #include <thread>
 #include <iomanip>
+#include <vector>
+#include <queue>
+#include <memory>
+#include <cstdint>
+#include <chrono>
+#include <condition_variable>
+#include <atomic>
+#include <functional>
+#include <algorithm>
 
 
 //IO throttle includes
@@ -87,39 +103,202 @@ using namespace std;
 #define SFS_DEFAULT_CLONE_FD "0"
 
 //IO throttle data structure
-struct RateLimiter {
-    std::chrono::steady_clock::time_point last_op_time;
-    std::atomic<uint64_t>bytes_this_second;
-    uint64_t bytes_per_second_limit;
-    std::mutex mutex;
 
-    RateLimiter(uint64_t bps_limit) : bytes_this_second(0), bytes_per_second_limit(bps_limit) {
-        last_op_time = std::chrono::steady_clock::now();
-    }
+#define tokenTroughput  1 << 10
+#define initialtoken 10 
 
-    void throttle(uint64_t bytes) {
-        std::lock_guard<std::mutex> lock(mutex);
-        auto now = std::chrono::steady_clock::now();
-        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - last_op_time).count();
-
-        if (elapsed >= 1) {
-            bytes_this_second = 0;
-            last_op_time = now;
-        }
-
-        bytes_this_second += bytes;
-
-        if (bytes_this_second > bytes_per_second_limit) {
-            auto sleep_duration = std::chrono::milliseconds(1000 - (elapsed * 1000) );
-            std::this_thread::sleep_for(sleep_duration);
-            bytes_this_second = bytes;
-            last_op_time = std::chrono::steady_clock::now();
-        }
-    }
+enum Request_type{
+    SLICE = 1 << 0,
+    JOB = 1 << 1,
 };
 
+struct Request {
+    uint64_t size;
+    uint64_t offset;
+    fuse_file_info fi;
+    fuse_bufvec *buf;
+
+    Request_type type;
+
+    //if a task is from a same TokenBucket, they should have the same fuse_bufvec addr
+};
+
+//each task will automaticly turn in to smaller task if it is bigger than a 'token size'
+//so write function will now instead of calling any function, it should create a TockenBucket struct
+class TokenBucket {
+
+    private :
+        fuse_req_t req; 
+        std::atomic<uint64_t> token;
+        off_t offset;
+        size_t size;
+        fuse_bufvec *buf;
+        std::queue<Request> pendingSlices;
+        std::queue<Request> readySlices;
+        struct fuse_file_info fi;
+        mutable std::mutex mutex;
 
 
+    public : 
+
+        TokenBucket(fuse_req_t req, size_t size, off_t offset, const fuse_file_info& fi, uint64_t initial) 
+            : req(req), token(initial), offset(offset), size(size), fi(fi) {
+                split_request(size, offset);
+            }
+    
+        void process_slices() {
+            std::lock_guard<std::mutex> lock(mutex);
+            while(!pendingSlices.empty() && token > 0) {
+                readySlices.push(pendingSlices.front());
+                pendingSlices.pop();
+                --token;
+            }
+        }
+
+        bool has_ready_slices() const {
+            std::lock_guard<std::mutex> lock(mutex);
+            return !readySlices.empty();
+        }
+            
+        Request get_next_ready_slice() {
+            std::lock_guard<std::mutex> lock(mutex);
+            if(readySlices.empty()) {
+                throw std::runtime_error("No ready slices");
+            }
+            Request slice = readySlices.back();
+            readySlices.pop();
+            return slice;
+        }
+
+        bool is_complete() const {
+            std::lock_guard<std::mutex> lock(mutex);
+            return pendingSlices.empty() && readySlices.empty();
+        }
+
+        void add_tokens(uint64_t count = 1) {
+            token += count;
+        }
+
+    private :
+        void split_request(size_t size, off_t offset) {
+            std::lock_guard<std::mutex> lock(mutex);
+            while( size > 0) {
+                   size_t chunk_size = std::min(static_cast<size_t>(size), static_cast<size_t>(tokenTroughput));
+                   pendingSlices.push(Request{chunk_size, static_cast<uint64_t>(offset), fi, buf, Request_type::SLICE});
+                   size -= chunk_size;
+                   offset += chunk_size;
+            }
+        }
+
+};
+
+std::vector<std::shared_ptr<TokenBucket>> active_buckets;
+std::mutex active_buckets_mutex;
+std::atomic<bool> should_replenish(false);
+
+void signal_handler(int signum) {
+    (void)signum;
+    should_replenish.store(true, std::memory_order_release);
+}
+
+void replenish_tokens(std::vector<std::shared_ptr<TokenBucket>>& active_buckets, uint64_t tokens_to_add) {
+    for (auto& bucket : active_buckets) {
+        bucket->add_tokens();
+        bucket->process_slices();
+    }
+}
+
+void process_request() {
+    std::lock_guard<std::mutex> lock(active_buckets_mutex);
+    active_buckets.erase( 
+        std::remove_if(active_buckets.begin(), active_buckets.end(),
+            [](const auto& bucket) {return bucket->is_complete(); }),
+            active_buckets.end());
+
+    for(auto& bucket : active_buckets) {
+        while (bucket->has_ready_slices()) {
+            Request slice = bucket->get_next_ready_slice();
+            //TODO: process the slice
+            //.....
+        }
+    }
+}
+
+
+bool setup_timer() {
+    struct sigaction sa;
+    struct itimerspec its;
+    struct sigevent sev;
+    timer_t timerid;
+    
+    sa.sa_handler = signal_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    if (sigaction(SIGRTMIN, &sa, nullptr) == -1) {
+        std::cerr << "Error: sigaction falied " << strerror(errno) << std::endl;
+        return false;
+    }
+
+    sev.sigev_notify = SIGEV_SIGNAL;
+    sev.sigev_signo = SIGRTMIN;
+    sev.sigev_value.sival_ptr = &timerid;
+    if (timer_create(CLOCK_REALTIME, &sev, &timerid) == -1 ) {
+        std::cerr << "Error: timer_create failed: " << strerror(errno) << std::endl;
+        return false;
+    }
+
+    its.it_value.tv_nsec = 0;
+    its.it_value.tv_sec = 1;
+    its.it_interval.tv_sec = 1;
+    its.it_interval.tv_nsec = 0;
+
+    if (timer_settime(timerid, 0, &its, nullptr) == -1) {
+        std::cerr << "Error: timer_settime failed: " << strerror(errno) << std::endl;
+    }
+
+    return true;
+}
+
+
+
+//There should be only one manager(????) in a passthrough file syste
+//all it does is sending read/write request to the underlying fs
+//manager should also check if there is any Tockenbucket left
+//and call retry fucntion ever once a while
+//class Manager {
+//    private :
+//        std::unique_ptr<std::queue<Request>> job_queue;
+//        std::vector<std::shared_ptr<TokenBucket>> tokenbuckets;
+//        std::mutex job_queue_mutex;
+//        std::mutex buckets_mutex;
+//    public :
+//        Manager() : job_queue(std::make_unique<std::queue<Request>>()) {}
+//    
+//        std::shared_ptr<TokenBucket> create_token_bucket(fuse_req_t req, size_t size, off_t offset, const fuse_file_info& fi, uint64_t initial) {
+//            auto push_callback = [this](const Request& req) {
+//                std::lock_guard<std::mutex> lock(job_queue_mutex);
+//                job_queue->push(req);
+//            };
+//
+//            auto bucket = std::make_shared<TokenBucket>(req, size, offset, fi, initial, push_callback);
+//
+//            std::lock_guard<std::mutex> lock(job_queue_mutex);
+//            tokenbuckets.push_back(bucket);
+//            
+//            return bucket;
+//        }
+//
+//        void porcess_request() {
+//            while(!job_queue->empty()) {
+//                auto request = job_queue->front();
+//                //TODO :process the request
+//                
+//                job_queue->pop();
+//            }
+//        }
+//};
+
+//std::queue<struct request> job_queue;
 
 
 /* We are re-using pointers to our `struct sfs_inode` and `struct
@@ -202,8 +381,8 @@ struct Fs {
     bool direct_io;
 
     //data structure for IO throttle
-    RateLimiter *readLimiter;
-    RateLimiter *writeLimiter;
+    //RateLimiter *readLimiter;
+    //RateLimiter *writeLimiter;
 };
 static Fs fs{};
 
@@ -235,6 +414,12 @@ static int get_fs_fd(fuse_ino_t ino) {
 
 static void sfs_init(void *userdata, fuse_conn_info *conn) {
     (void)userdata;
+
+    if(!setup_timer()) {
+        std::cerr << "Failed to setup timer for token replenishment" << std::endl;
+    } else {
+        std::cout << "Token replenishment timer set up successfully" << std::endl;
+    }
     if (conn->capable & FUSE_CAP_EXPORT_SUPPORT)
         conn->want |= FUSE_CAP_EXPORT_SUPPORT;
 
@@ -975,6 +1160,7 @@ static void sfs_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 
 
 static void do_read(fuse_req_t req, size_t size, off_t off, fuse_file_info *fi) {
+    
 
     fuse_bufvec buf = FUSE_BUFVEC_INIT(size);
     buf.buf[0].flags = static_cast<fuse_buf_flags>(
@@ -994,6 +1180,9 @@ static void sfs_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 
 static void do_write_buf(fuse_req_t req, size_t size, off_t off,
                          fuse_bufvec *in_buf, fuse_file_info *fi) {
+    
+
+
     fuse_bufvec out_buf = FUSE_BUFVEC_INIT(size);
     out_buf.buf[0].flags = static_cast<fuse_buf_flags>(
         FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK);
