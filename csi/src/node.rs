@@ -43,8 +43,7 @@ impl NodeService {
 
         Ok(Pod {
             metadata: ObjectMeta {
-                // FIXME: avoid name collision when multiple interposer volumes are mounted
-                name: Some(format!("{}-interposer", pod.name_unchecked())),
+                name: Some(format!("{}-{}", pod.name_unchecked(), request.volume_id)),
                 namespace: pod.namespace(),
                 owner_references: Some(pod.owner_ref(&()).into_iter().collect()),
                 ..Default::default()
