@@ -47,6 +47,7 @@
               };
             })
             abseil-cpp
+            cxxopts
           ];
           dontUseCmakeConfigure = true;
         };
