@@ -79,6 +79,7 @@
 
 #include "workload_tracing.h"
 #include "faulty_delay.h"
+#include "nop.h"
 
 using namespace std;
 
@@ -1347,7 +1348,8 @@ int main(int argc, char *argv[]) {
     assign_operations(sfs_oper);
     fuse_lowlevel_ops tracing_oper = tracing_operations(sfs_oper);
     fuse_lowlevel_ops faulty_delay_oper = faulty_delay_operations(tracing_oper);
-    auto se = fuse_session_new(&args, &faulty_delay_oper, sizeof(faulty_delay_oper), &fs);
+    fuse_lowlevel_ops nop_oper = nop_operations(faulty_delay_oper);
+    auto se = fuse_session_new(&args, &nop_oper, sizeof(nop_oper), &fs);
     if (se == nullptr)
         goto err_out1;
 

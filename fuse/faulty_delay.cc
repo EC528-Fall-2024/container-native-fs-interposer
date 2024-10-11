@@ -30,7 +30,6 @@ void log_error(const char *error_message) {
 static void read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                  struct fuse_file_info *fi) {
   // simulate truncated reads
-  srand(time(NULL));
   if (rand() % 10 == 0) { // 10% probability of a short read
     size = size / 2;      // Return half the requested size
     log_error("lo_read: Truncated read occured");
@@ -106,6 +105,7 @@ static void fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 }
 
 fuse_lowlevel_ops faulty_delay_operations(fuse_lowlevel_ops &_next) {
+  srand(time(NULL));
   // Create ostream span exporter instance
   next = &_next;
 

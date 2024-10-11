@@ -20,6 +20,7 @@ executable(
     'passthrough_hp.cc',
     'workload_tracing.cc',
     'faulty_delay.cc',
+    'nop.cc',
     dependencies: [cxxopts, fuse, opentelemetry],
     install: true,
 )
