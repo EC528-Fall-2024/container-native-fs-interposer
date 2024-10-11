@@ -20,6 +20,6 @@ This folder contains implementations of utility FUSE file systems with the follo
 
 1) cd container-native-fs-interposer/fuse/build    
 2) mkdir /tmp/test-fuse-fs   
-2) Run the file system: ./interposer /tmp/test /tmp/test-fuse-fs  
+2) Run the file system: ./interposer /tmp/test /tmp/test-fuse-fs --foreground
 4) Use mounted file system: cd /tmp/test-fuse-fs  
 3) Unmount file system: fusermount -u /tmp/test-fuse-fs
