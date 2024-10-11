@@ -1,9 +1,9 @@
 use crate::csi::v1::node_server::Node;
 use crate::csi::v1::*;
-use k8s_openapi::api::core::v1::PersistentVolumeClaimVolumeSource;
 use k8s_openapi::api::core::v1::{
     Container, HostPathVolumeSource, Pod, PodSpec, SecurityContext, Volume, VolumeMount,
 };
+use k8s_openapi::api::core::v1::{EnvVar, PersistentVolumeClaimVolumeSource};
 use kube::runtime::conditions;
 use kube::runtime::wait::await_condition;
 use kube::{
@@ -41,6 +41,17 @@ impl NodeService {
                 "missing persistentVolumeClaimName in volumeAttributes",
             ))?;
 
+        let command = request
+            .volume_context
+            .get("command")
+            .ok_or(Status::invalid_argument(
+                "missing command in volumeAttributes",
+            ))?;
+
+        let command = shlex::split(command).ok_or(Status::invalid_argument(
+            "unable to split command in volumeAttributes",
+        ))?;
+
         Ok(Pod {
             metadata: ObjectMeta {
                 name: Some(format!("{}-{}", pod.name_unchecked(), request.volume_id)),
@@ -59,11 +70,12 @@ impl NodeService {
                 ),
                 restart_policy: Some("Never".to_string()),
                 containers: vec![Container {
-                    command: Some(vec![
-                        "basic_passthrough".to_string(),
-                        "-d".to_string(),
-                        request.target_path.clone(),
-                    ]),
+                    command: Some(command),
+                    env: Some(vec![EnvVar {
+                        name: "TARGET_PATH".to_string(),
+                        value: Some(request.target_path.clone()),
+                        ..Default::default()
+                    }]),
                     image: Some("docker.io/library/csi-node:latest".to_string()),
                     image_pull_policy: Some("IfNotPresent".to_string()),
                     name: "interposer".to_string(),

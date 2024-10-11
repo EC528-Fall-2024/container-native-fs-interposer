@@ -51,3 +51,4 @@ spec:
             driver: interposer.csi.example.com
             volumeAttributes:
               persistentVolumeClaimName: minio-pvc
+              command: basic_passthrough -d $(TARGET_PATH)
