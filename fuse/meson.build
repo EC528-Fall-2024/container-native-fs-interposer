@@ -18,7 +18,8 @@ opentelemetry = dependency(
 executable(
     'interposer',
     'passthrough_hp.cc',
-    'workload_tracing.cpp',
+    'workload_tracing.cc',
+    'faulty_delay.cc',
     dependencies: [cxxopts, fuse, opentelemetry],
     install: true,
 )

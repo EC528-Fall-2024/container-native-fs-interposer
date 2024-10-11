@@ -78,6 +78,7 @@
 #include <iostream>
 
 #include "workload_tracing.h"
+#include "faulty_delay.h"
 
 using namespace std;
 
@@ -1345,7 +1346,8 @@ int main(int argc, char *argv[]) {
     fuse_lowlevel_ops sfs_oper {};
     assign_operations(sfs_oper);
     fuse_lowlevel_ops tracing_oper = tracing_operations(sfs_oper);
-    auto se = fuse_session_new(&args, &tracing_oper, sizeof(tracing_oper), &fs);
+    fuse_lowlevel_ops faulty_delay_oper = faulty_delay_operations(tracing_oper);
+    auto se = fuse_session_new(&args, &faulty_delay_oper, sizeof(faulty_delay_oper), &fs);
     if (se == nullptr)
         goto err_out1;
 
