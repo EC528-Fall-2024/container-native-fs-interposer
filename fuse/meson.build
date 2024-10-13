@@ -2,6 +2,8 @@ project('fuse_fs', 'cpp')
 
 fuse = dependency('fuse3')
 
+thread = dependency('threads')
+
 # Protobuf dependency
 proto_dep = dependency('protobuf')
 grpc_dep = dependency('grpc++')
@@ -43,3 +45,12 @@ foreach utility_fs: all_utility_fs
         install : true,
     )
 endforeach
+
+
+
+executable(
+  'passthrough_hp',
+  'passthrough/passthrough_hp.cc',
+  dependencies: [ thread, fuse],
+  install: false
+)
