@@ -50,6 +50,7 @@
 #endif
 
 // C includes
+#include "passthrough_hp.hpp"
 #include <dirent.h>
 #include <err.h>
 #include <errno.h>
@@ -78,89 +79,69 @@
 
 using namespace std;
 
-#define SFS_DEFAULT_THREADS "-1" // take libfuse value as default
-#define SFS_DEFAULT_CLONE_FD "0"
 
-/* We are re-using pointers to our `struct sfs_inode` and `struct
-   sfs_dirp` elements as inodes and file handles. This means that we
-   must be able to store pointer a pointer in both a fuse_ino_t
-   variable and a uint64_t variable (used for file handles). */
-static_assert(sizeof(fuse_ino_t) >= sizeof(void*),
-              "void* must fit into fuse_ino_t");
-static_assert(sizeof(fuse_ino_t) >= sizeof(uint64_t),
-              "fuse_ino_t must be at least 64 bits");
+// #define SFS_DEFAULT_THREADS "-1" // take libfuse value as default
+// #define SFS_DEFAULT_CLONE_FD "0"
+
+// /* We are re-using pointers to our `struct sfs_inode` and `struct
+//    sfs_dirp` elements as inodes and file handles. This means that we
+//    must be able to store pointer a pointer in both a fuse_ino_t
+//    variable and a uint64_t variable (used for file handles). */
+// static_assert(sizeof(fuse_ino_t) >= sizeof(void*),
+//               "void* must fit into fuse_ino_t");
+// static_assert(sizeof(fuse_ino_t) >= sizeof(uint64_t),
+//               "fuse_ino_t must be at least 64 bits");
 
 
-/* Forward declarations */
-struct Inode;
-static Inode& get_inode(fuse_ino_t ino);
-static void forget_one(fuse_ino_t ino, uint64_t n);
+// /* Forward declarations */
+// struct Inode;
+// static Inode& get_inode(fuse_ino_t ino);
+// static void forget_one(fuse_ino_t ino, uint64_t n);
 
-// Uniquely identifies a file in the source directory tree. This could
-// be simplified to just ino_t since we require the source directory
-// not to contain any mountpoints. This hasn't been done yet in case
-// we need to reconsider this constraint (but relaxing this would have
-// the drawback that we can no longer re-use inode numbers, and thus
-// readdir() would need to do a full lookup() in order to report the
-// right inode number).
-typedef std::pair<ino_t, dev_t> SrcId;
+// // Uniquely identifies a file in the source directory tree. This could
+// // be simplified to just ino_t since we require the source directory
+// // not to contain any mountpoints. This hasn't been done yet in case
+// // we need to reconsider this constraint (but relaxing this would have
+// // the drawback that we can no longer re-use inode numbers, and thus
+// // readdir() would need to do a full lookup() in order to report the
+// // right inode number).
+// typedef std::pair<ino_t, dev_t> SrcId;
 
-// Define a hash function for SrcId
-namespace std {
-    template<>
-    struct hash<SrcId> {
-        size_t operator()(const SrcId& id) const {
-            return hash<ino_t>{}(id.first) ^ hash<dev_t>{}(id.second);
-        }
-    };
-}
+// // Define a hash function for SrcId
+// namespace std {
+//     template<>
+//     struct hash<SrcId> {
+//         size_t operator()(const SrcId& id) const {
+//             return hash<ino_t>{}(id.first) ^ hash<dev_t>{}(id.second);
+//         }
+//     };
+// }
 
-// Maps files in the source directory tree to inodes
-typedef std::unordered_map<SrcId, Inode> InodeMap;
+// // Maps files in the source directory tree to inodes
+// typedef std::unordered_map<SrcId, Inode> InodeMap;
 
-struct Inode {
-    int fd {-1};
-    dev_t src_dev {0};
-    ino_t src_ino {0};
-    int generation {0};
-    uint64_t nopen {0};
-    uint64_t nlookup {0};
-    std::mutex m;
+// struct Inode {
+//     int fd {-1};
+//     dev_t src_dev {0};
+//     ino_t src_ino {0};
+//     int generation {0};
+//     uint64_t nopen {0};
+//     uint64_t nlookup {0};
+//     std::mutex m;
 
-    // Delete copy constructor and assignments. We could implement
-    // move if we need it.
-    Inode() = default;
-    Inode(const Inode&) = delete;
-    Inode(Inode&& inode) = delete;
-    Inode& operator=(Inode&& inode) = delete;
-    Inode& operator=(const Inode&) = delete;
+//     // Delete copy constructor and assignments. We could implement
+//     // move if we need it.
+//     Inode() = default;
+//     Inode(const Inode&) = delete;
+//     Inode(Inode&& inode) = delete;
+//     Inode& operator=(Inode&& inode) = delete;
+//     Inode& operator=(const Inode&) = delete;
 
-    ~Inode() {
-        if(fd > 0)
-            close(fd);
-    }
-};
-
-struct Fs {
-    // Must be acquired *after* any Inode.m locks.
-    std::mutex mutex;
-    InodeMap inodes; // protected by mutex
-    Inode root;
-    double timeout;
-    bool debug;
-    bool debug_fuse;
-    bool foreground;
-    std::string source;
-    size_t blocksize;
-    dev_t src_dev;
-    bool nosplice;
-    bool nocache;
-    size_t num_threads;
-    bool clone_fd;
-    std::string fuse_mount_options;
-    bool direct_io;
-};
-static Fs fs{};
+//     ~Inode() {
+//         if(fd > 0)
+//             close(fd);
+//     }
+// };
 
 
 #define FUSE_BUF_COPY_FLAGS                      \
@@ -1122,7 +1103,7 @@ static void sfs_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name) {
 #endif
 
 
-static void assign_operations(fuse_lowlevel_ops &sfs_oper) {
+void assign_operations(fuse_lowlevel_ops &sfs_oper) {
     sfs_oper.init = sfs_init;
     sfs_oper.lookup = sfs_lookup;
     sfs_oper.mkdir = sfs_mkdir;
@@ -1205,7 +1186,7 @@ static std::string string_join(const std::vector<std::string>& elems, char delim
 }
 
 
-static cxxopts::ParseResult parse_options(int argc, char **argv) {
+cxxopts::ParseResult parse_options(int argc, char **argv) {
     cxxopts::Options opt_parser(argv[0]);
     std::vector<std::string> mount_options;
     opt_parser.add_options()
@@ -1288,7 +1269,7 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
 }
 
 
-static void maximize_fd_limit() {
+void maximize_fd_limit() {
     struct rlimit lim {};
     auto res = getrlimit(RLIMIT_NOFILE, &lim);
     if (res != 0) {
@@ -1301,9 +1282,7 @@ static void maximize_fd_limit() {
         warn("WARNING: setrlimit() failed with");
 }
 
-
-int main(int argc, char *argv[]) {
-
+int setup_fuse(int argc, char *argv[], fuse_lowlevel_ops &oper) {
     struct fuse_loop_config *loop_config = NULL;
 
     // Parse command line options
@@ -1339,9 +1318,7 @@ int main(int argc, char *argv[]) {
         (fs.debug_fuse && fuse_opt_add_arg(&args, "-odebug")))
         errx(3, "ERROR: Out of memory");
 
-    fuse_lowlevel_ops sfs_oper {};
-    assign_operations(sfs_oper);
-    auto se = fuse_session_new(&args, &sfs_oper, sizeof(sfs_oper), &fs);
+    auto se = fuse_session_new(&args, &oper, sizeof(oper), &fs);
     if (se == nullptr)
         goto err_out1;
 

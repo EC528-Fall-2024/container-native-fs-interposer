@@ -10,7 +10,8 @@ grpc_dep = dependency('grpc++')
 
 # Get OpenTelemetry dependency
 ot_path = '/home/julia/source/install/lib'
-ot_dep = dependency('opentelemetry-cpp',
+ot_dep = dependency(
+  'opentelemetry-cpp',
   modules: [
     'opentelemetry-cpp::proto',
     'opentelemetry-cpp::api',
@@ -26,31 +27,13 @@ ot_dep = dependency('opentelemetry-cpp',
   ]
 )
 
-
 # Create executables
 
-all_utility_fs = [
-    ['basic_passthrough', []],
-    ['workload_tracing', [ot_dep, proto_dep, grpc_dep]]
-]
-
-foreach utility_fs: all_utility_fs
-    executable(
-        utility_fs[0],
-        utility_fs[0] + '.cpp',
-        'passthrough/passthrough.cpp',
-        'passthrough/passthrough.h',
-        'passthrough/passthrough_helpers.h',
-        dependencies: [fuse, utility_fs[1]],
-        install : true,
-    )
-endforeach
-
-
-
 executable(
-  'passthrough_hp',
-  'passthrough/passthrough_hp.cc',
-  dependencies: [ thread, fuse],
+  'interposer',
+  'interposer.cc',
+  'include/passthrough_hp.cc',
+  'include/workload_tracing.cpp',
+  dependencies: [thread, fuse, ot_dep, proto_dep, grpc_dep],
   install: false
 )
