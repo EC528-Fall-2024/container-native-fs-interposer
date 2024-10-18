@@ -52,6 +52,14 @@ impl NodeService {
             "unable to split command in volumeAttributes",
         ))?;
 
+        let otlp_endpoint =
+            request
+                .volume_context
+                .get("otlpEndpoint")
+                .ok_or(Status::invalid_argument(
+                    "missing otlpEndpoint in volumeAttributes",
+                ))?;
+
         let source_path = "/lowerdir";
 
         Ok(Pod {
@@ -82,6 +90,11 @@ impl NodeService {
                         EnvVar {
                             name: "TARGET_PATH".to_string(),
                             value: Some(request.target_path.clone()),
+                            ..Default::default()
+                        },
+                        EnvVar {
+                            name: "OTLP_ENDPOINT".to_string(),
+                            value: Some(otlp_endpoint.to_string()),
                             ..Default::default()
                         },
                     ]),
