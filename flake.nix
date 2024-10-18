@@ -37,6 +37,8 @@
           ];
           buildInputs = [
             fuse3
+            protobuf
+            grpc
             (opentelemetry-cpp.overrideAttrs rec {
               version = "1.17.0";
               src = fetchFromGitHub {

@@ -35,5 +35,5 @@ executable(
   'include/passthrough_hp.cc',
   'include/workload_tracing.cpp',
   dependencies: [thread, fuse, ot_dep, proto_dep, grpc_dep],
-  install: false
+  install: true
 )

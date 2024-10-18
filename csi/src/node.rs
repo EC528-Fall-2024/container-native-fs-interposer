@@ -52,6 +52,8 @@ impl NodeService {
             "unable to split command in volumeAttributes",
         ))?;
 
+        let source_path = "/lowerdir";
+
         Ok(Pod {
             metadata: ObjectMeta {
                 name: Some(format!("{}-{}", pod.name_unchecked(), request.volume_id)),
@@ -71,11 +73,18 @@ impl NodeService {
                 restart_policy: Some("Never".to_string()),
                 containers: vec![Container {
                     command: Some(command),
-                    env: Some(vec![EnvVar {
-                        name: "TARGET_PATH".to_string(),
-                        value: Some(request.target_path.clone()),
-                        ..Default::default()
-                    }]),
+                    env: Some(vec![
+                        EnvVar {
+                            name: "SOURCE_PATH".to_string(),
+                            value: Some(source_path.to_string()),
+                            ..Default::default()
+                        },
+                        EnvVar {
+                            name: "TARGET_PATH".to_string(),
+                            value: Some(request.target_path.clone()),
+                            ..Default::default()
+                        },
+                    ]),
                     image: Some("docker.io/library/csi-node:latest".to_string()),
                     image_pull_policy: Some("IfNotPresent".to_string()),
                     name: "interposer".to_string(),
@@ -96,7 +105,7 @@ impl NodeService {
                             ..Default::default()
                         },
                         VolumeMount {
-                            mount_path: "/lowerdir".to_string(),
+                            mount_path: source_path.to_string(),
                             name: "lowerdir".to_string(),
                             ..Default::default()
                         },
