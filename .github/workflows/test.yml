@@ -34,9 +34,8 @@ jobs:
       - name: Apply CSI plugin manifests
         run: |
           kubectl apply -k deploy
-      - name: Wait for daemonset to rollout
-        run: |
           kubectl -n csi-interposer rollout status daemonset csi-interposer
+          kubectl wait jaegers.jaegertracing.io jaeger-default --for=jsonpath='{.status.phase}'=Running
       - name: Apply CSI example manifests
         run: |
           kubectl apply -k examples

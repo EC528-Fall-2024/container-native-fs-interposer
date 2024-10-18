@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - csidriver.yaml
   - daemonset.yaml
+  - jaeger.yaml
