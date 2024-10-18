@@ -44,10 +44,19 @@ static std::string hostName = "MyHost";
 
 static fuse_lowlevel_ops *tracing_next;
 
+static std::string otlpEndpoint() {
+    const char* endpoint = std::getenv("OTLP_ENDPOINT");
+    if (endpoint)
+        return std::string(endpoint);
+    else
+        return "localhost:4317";
+}
+
+
 static void initTracer() {
 	// Create OTLP exporter instance
 	otlp::OtlpGrpcExporterOptions opts;
-	opts.endpoint = "localhost:4317";
+	opts.endpoint = otlpEndpoint();
 	auto exporter = otlp::OtlpGrpcExporterFactory::Create(opts);
 	auto processor = std::unique_ptr<trace_sdk::SpanProcessor>(
 		new trace_sdk::SimpleSpanProcessor(std::move(exporter))
