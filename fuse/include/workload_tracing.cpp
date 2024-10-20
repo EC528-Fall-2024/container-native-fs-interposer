@@ -33,9 +33,13 @@ static void setAttribute(const nostd::shared_ptr<trace::Span>& span, fuse_req_t 
 	span->SetAttribute("Process ID", ctxPtr->pid);
 }
 
-static void setAttribute(const nostd::shared_ptr<trace::Span>& span, fuse_ino_t ino) {
+static void setAttribute(const nostd::shared_ptr<trace::Span>& span, fuse_ino_t ino, bool isParent) {
 	Inode& inode = get_inode(ino);
-	span->SetAttribute("Inode Number", inode.src_ino);	
+	if (isParent) {
+		span->SetAttribute("Parent Directory's Inode Number", inode.src_ino);	
+	} else {
+		span->SetAttribute("Inode Number", inode.src_ino);	
+	}
 }
 
 // Low-level file operations
@@ -49,16 +53,14 @@ static void tracing_init(void *userdata, struct fuse_conn_info *conn)
 }
 
 static void tracing_destroy(void *userdata) {
-	auto span = getSpan(LIB_NAME, "Destroy");
-	tracing_next->destroy(userdata);
-	span->End();
-
 	cleanupTracer();
+	tracing_next->destroy(userdata);
 }
 
 static void tracing_lookup(fuse_req_t req, fuse_ino_t parent, const char *name) {
 	auto span = getSpan(LIB_NAME, "Lookup");
 	setAttribute(span, req);
+	setAttribute(span, parent, true);
 	span->SetAttribute("Name", name);
 	tracing_next->lookup(req, parent, name);
 	span->End();
@@ -68,7 +70,9 @@ static void tracing_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
     mode_t mode) {
 	auto span = getSpan(LIB_NAME, "Mkdir");
 	setAttribute(span, req);
+	setAttribute(span, parent, true);
 	span->SetAttribute("Name", name);
+	span->SetAttribute("Mode", mode);
 	tracing_next->mkdir(req, parent, name, mode);
 	span->End();
 }
@@ -77,7 +81,9 @@ static void tracing_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
 	mode_t mode, dev_t rdev) {
 	auto span = getSpan(LIB_NAME, "Mknod");
 	setAttribute(span, req);
+	setAttribute(span, parent, true);
 	span->SetAttribute("Name", name);
+	span->SetAttribute("Mode", mode);
 	tracing_next->mknod(req, parent, name, mode, rdev);
 	span->End();
 }
@@ -86,7 +92,9 @@ static void tracing_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,
 	const char *name) {
 	auto span = getSpan(LIB_NAME, "Symlink");
 	setAttribute(span, req);
+	setAttribute(span, parent, true);
 	span->SetAttribute("Name", name);
+	span->SetAttribute("Link", link);
 	tracing_next->symlink(req, link, parent, name);
 	span->End();
 }
@@ -95,7 +103,8 @@ static void tracing_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 	const char *name) {
 	auto span = getSpan(LIB_NAME, "Link");
 	setAttribute(span, req);
-	setAttribute(span, ino);
+	setAttribute(span, ino, false);
+	setAttribute(span, parent, true);
 	span->SetAttribute("Name", name);
 	tracing_next->link(req, ino, parent, name);
 	span->End();
@@ -104,6 +113,7 @@ static void tracing_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 static void tracing_unlink(fuse_req_t req, fuse_ino_t parent, const char *name) {
 	auto span = getSpan(LIB_NAME, "Unlink");
 	setAttribute(span, req);
+	setAttribute(span, parent, true);
 	span->SetAttribute("Name", name);
 	tracing_next->unlink(req, parent, name);
 	span->End();
@@ -112,6 +122,7 @@ static void tracing_unlink(fuse_req_t req, fuse_ino_t parent, const char *name) 
 static void tracing_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name) {
 	auto span = getSpan(LIB_NAME, "Rmdir");
 	setAttribute(span, req);
+	setAttribute(span, parent, true);
 	span->SetAttribute("Name", name);
 	tracing_next->rmdir(req, parent, name);
 	span->End();
@@ -121,7 +132,13 @@ static void tracing_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 	fuse_ino_t newparent, const char *newname, unsigned int flags) {
 	auto span = getSpan(LIB_NAME, "Rename");
 	setAttribute(span, req);
+	span->SetAttribute("Flags", flags);
+
+	setAttribute(span, parent, true);
 	span->SetAttribute("Name", name);
+	span->SetAttribute("New Parent Directory's Inode Number", get_inode(newparent).src_ino);
+	span->SetAttribute("New Name", newname);
+
 	tracing_next->rename(req, parent, name, newparent, newname, flags);
 	span->End();
 }
@@ -129,7 +146,7 @@ static void tracing_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 static void tracing_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup) {
 	auto span = getSpan(LIB_NAME, "Forget");
 	setAttribute(span, req);
-	setAttribute(span, ino);
+	setAttribute(span, ino, false);
 	tracing_next->forget(req, ino, nlookup);
 	span->End();
 }
@@ -145,7 +162,7 @@ static void tracing_forget_multi(fuse_req_t req, size_t count,
 static void tracing_getattr(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
 	auto span = getSpan(LIB_NAME, "Get Attribute");
 	setAttribute(span, req);
-	setAttribute(span, ino);
+	setAttribute(span, ino, false);
 	tracing_next->getattr(req, ino, fi);
 	span->End();
 }
@@ -154,7 +171,8 @@ static void tracing_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 	int valid, fuse_file_info *fi) {
 	auto span = getSpan(LIB_NAME, "Set Attribute");
 	setAttribute(span, req);
-	setAttribute(span, ino);
+	setAttribute(span, ino, false);
+	span->SetAttribute("Valid", valid);
 	tracing_next->setattr(req, ino, attr, valid, fi);
 	span->End();
 }
@@ -162,7 +180,7 @@ static void tracing_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 static void tracing_readlink(fuse_req_t req, fuse_ino_t ino) {
 	auto span = getSpan(LIB_NAME, "Read Link");
 	setAttribute(span, req);
-	setAttribute(span, ino);
+	setAttribute(span, ino, false);
 	tracing_next->readlink(req, ino);
 	span->End();
 }
@@ -170,7 +188,7 @@ static void tracing_readlink(fuse_req_t req, fuse_ino_t ino) {
 static void tracing_opendir(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
 	auto span = getSpan(LIB_NAME, "Open Directory");
 	setAttribute(span, req);
-	setAttribute(span, ino);
+	setAttribute(span, ino, false);
 	tracing_next->opendir(req, ino, fi);
 	span->End();
 }
@@ -179,7 +197,9 @@ static void tracing_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 	off_t offset, fuse_file_info *fi) {
 	auto span = getSpan(LIB_NAME, "Read Directory");
 	setAttribute(span, req);
-	setAttribute(span, ino);
+	setAttribute(span, ino, false);
+	span->SetAttribute("Size", size);
+	span->SetAttribute("Offset", offset);
 	tracing_next->readdir(req, ino, size, offset, fi);
 	span->End();
 }
@@ -188,7 +208,9 @@ static void tracing_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size,
 	off_t offset, fuse_file_info *fi) {
 	auto span = getSpan(LIB_NAME, "Read Directory Plus");
 	setAttribute(span, req);
-	setAttribute(span, ino);
+	setAttribute(span, ino, false);
+	span->SetAttribute("Size", size);
+	span->SetAttribute("Offset", offset);
 	tracing_next->readdirplus(req, ino, size, offset, fi);
 	span->End();	
 }
@@ -196,7 +218,7 @@ static void tracing_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size,
 static void tracing_releasedir(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
 	auto span = getSpan(LIB_NAME, "Release Directory");
 	setAttribute(span, req);
-	setAttribute(span, ino);
+	setAttribute(span, ino, false);
 	tracing_next->releasedir(req, ino, fi);
 	span->End();	
 }
@@ -205,7 +227,8 @@ static void tracing_fsyncdir(fuse_req_t req, fuse_ino_t ino, int datasync,
 	fuse_file_info *fi) {
 	auto span = getSpan(LIB_NAME, "Fsync Directory");
 	setAttribute(span, req);
-	setAttribute(span, ino);
+	setAttribute(span, ino, false);
+	span->SetAttribute("Datasync", datasync);
 	tracing_next->fsyncdir(req, ino, datasync, fi);
 	span->End();	
 }
@@ -214,7 +237,9 @@ static void tracing_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	mode_t mode, fuse_file_info *fi) {
 	auto span = getSpan(LIB_NAME, "Create");
 	setAttribute(span, req);
+	setAttribute(span, parent, true);
 	span->SetAttribute("Name", name);
+	span->SetAttribute("Mode", mode);
 	tracing_next->create(req, parent, name, mode, fi);
 	span->End();	
 }
@@ -222,7 +247,7 @@ static void tracing_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 static void tracing_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
 	auto span = getSpan(LIB_NAME, "Open");
 	setAttribute(span, req);
-	setAttribute(span, ino);
+	setAttribute(span, ino, false);
 	tracing_next->open(req, ino, fi);
 	span->End();
 }
@@ -230,7 +255,7 @@ static void tracing_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
 static void tracing_release(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
 	auto span = getSpan(LIB_NAME, "Release");
 	setAttribute(span, req);
-	setAttribute(span, ino);
+	setAttribute(span, ino, false);
 	tracing_next->release(req, ino, fi);
 	span->End();
 }
@@ -238,7 +263,7 @@ static void tracing_release(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) 
 static void tracing_flush(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
 	auto span = getSpan(LIB_NAME, "Flush");
 	setAttribute(span, req);
-	setAttribute(span, ino);
+	setAttribute(span, ino, false);
 	tracing_next->flush(req, ino, fi);
 	span->End();
 }
@@ -247,7 +272,8 @@ static void tracing_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 	fuse_file_info *fi) {
 	auto span = getSpan(LIB_NAME, "Fsync");
 	setAttribute(span, req);
-	setAttribute(span, ino);
+	setAttribute(span, ino, false);
+	span->SetAttribute("Datasync", datasync);
 	tracing_next->fsync(req, ino, datasync, fi);
 	span->End();
 }
@@ -257,7 +283,7 @@ static void tracing_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 {
 	auto span = getSpan(LIB_NAME, "Read");	
 	setAttribute(span, req);
-	setAttribute(span, ino);
+	setAttribute(span, ino, false);
 	span->SetAttribute("Size", size);
 	span->SetAttribute("Offset", off);
 
@@ -270,7 +296,8 @@ static void tracing_write_buf(fuse_req_t req, fuse_ino_t ino, fuse_bufvec *in_bu
                           off_t off, fuse_file_info *fi) {
 	auto span = getSpan(LIB_NAME, "Write Buf");
 	setAttribute(span, req);
-	setAttribute(span, ino);
+	setAttribute(span, ino, false);
+	span->SetAttribute("Offset", off);
 	tracing_next->write_buf(req, ino, in_buf, off, fi);
 	span->End();
 }
@@ -278,7 +305,7 @@ static void tracing_write_buf(fuse_req_t req, fuse_ino_t ino, fuse_bufvec *in_bu
 static void tracing_statfs(fuse_req_t req, fuse_ino_t ino) {
 	auto span = getSpan(LIB_NAME, "Stat FS");
 	setAttribute(span, req);
-	setAttribute(span, ino);
+	setAttribute(span, ino, false);
 	tracing_next->statfs(req, ino);
 	span->End();
 }
@@ -288,7 +315,10 @@ static void tracing_fallocate(fuse_req_t req, fuse_ino_t ino, int mode,
                           off_t offset, off_t length, fuse_file_info *fi) {
 	auto span = getSpan(LIB_NAME, "Fallocate");
 	setAttribute(span, req);
-	setAttribute(span, ino);
+	setAttribute(span, ino, false);
+	span->SetAttribute("Offset", offset);
+	span->SetAttribute("Length", length);
+	span->SetAttribute("Mode", mode);
 	tracing_next->fallocate(req, ino, mode, offset, length, fi);
 	span->End();
 }
@@ -298,7 +328,8 @@ static void tracing_flock(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi,
 	int op) {
 	auto span = getSpan(LIB_NAME, "Flock");
 	setAttribute(span, req);
-	setAttribute(span, ino);
+	setAttribute(span, ino, false);
+	span->SetAttribute("Locking Operation", op);
 	tracing_next->flock(req, ino, fi, op);
 	span->End();
 }
@@ -308,8 +339,11 @@ static void tracing_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 	const char *value, size_t size, int flags) {
 	auto span = getSpan(LIB_NAME, "Set Extended Attribute");
 	setAttribute(span, req);
-	setAttribute(span, ino);
+	setAttribute(span, ino, false);
 	span->setAttribute("Name", name);
+	span->SetAttribute("Value", value);
+	span->SetAttribute("Size", size);
+	span->SetAttribute("Flags", flags);
 	tracing_next->setxattr(req, ino, name, value, size, flags);
 	span->End();
 }
@@ -318,8 +352,9 @@ static void tracing_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 	size_t size) {
 	auto span = getSpan(LIB_NAME, "Get Extended Attribute");
 	setAttribute(span, req);
-	setAttribute(span, ino);
+	setAttribute(span, ino, false);
 	span->setAttribute("Name", name);
+	span->SetAttribute("Size", size);
 	tracing_next->getxattr(req, ino, name, size);
 	span->End();
 }
@@ -327,7 +362,8 @@ static void tracing_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 static void tracing_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size) {
 	auto span = getSpan(LIB_NAME, "List Extended Attribute");
 	setAttribute(span, req);
-	setAttribute(span, ino);
+	setAttribute(span, ino, false);
+	span->SetAttribute("Size", size);
 	tracing_next->listxattr(req, ino, size);
 	span->End();
 }
@@ -335,7 +371,7 @@ static void tracing_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size) {
 static void tracing_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name) {
 	auto span = getSpan(LIB_NAME, "Remove Extended Attribute");
 	setAttribute(span, req);
-	setAttribute(span, ino);
+	setAttribute(span, ino, false);
 	span->setAttribute("Name", name);
 	tracing_next->removexattr(req, ino, name);
 	span->End();
