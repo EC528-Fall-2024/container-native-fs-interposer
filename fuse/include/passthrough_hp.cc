@@ -150,7 +150,7 @@ using namespace std;
             static_cast<fuse_buf_copy_flags>(0))
 
 
-static Inode& get_inode(fuse_ino_t ino) {
+Inode& get_inode(fuse_ino_t ino) {
     if (ino == FUSE_ROOT_ID)
         return fs.root;
 
