@@ -5,10 +5,19 @@
 #include "grpcpp/grpcpp.h"
 #include "opentelemetry/exporters/otlp/otlp_grpc_exporter.h"
 #include "opentelemetry/exporters/otlp/otlp_grpc_exporter_factory.h"
+#include "opentelemetry/exporters/otlp/otlp_grpc_metric_exporter_factory.h"
 #include "opentelemetry/exporters/otlp/otlp_grpc_exporter_options.h"
 #include "opentelemetry/exporters/ostream/span_exporter_factory.h"
 #include "opentelemetry/exporters/ostream/span_exporter.h"
+#include "opentelemetry/metrics/provider.h"
 #include "opentelemetry/nostd/shared_ptr.h"
+#include "opentelemetry/sdk/metrics/aggregation/default_aggregation.h"
+#include "opentelemetry/sdk/metrics/export/periodic_exporting_metric_reader.h"
+#include "opentelemetry/sdk/metrics/export/periodic_exporting_metric_reader_factory.h"
+#include "opentelemetry/sdk/metrics/meter.h"
+#include "opentelemetry/sdk/metrics/meter_context_factory.h"
+#include "opentelemetry/sdk/metrics/meter_provider.h"
+#include "opentelemetry/sdk/metrics/meter_provider_factory.h"
 #include "opentelemetry/sdk/resource/semantic_conventions.h"
 #include "opentelemetry/sdk/trace/exporter.h"
 #include "opentelemetry/sdk/trace/processor.h"
@@ -23,55 +32,26 @@
 #include "opentelemetry/trace/tracer_provider.h"
 
 namespace ot 		     = opentelemetry;
+namespace common		 = ot::common;
 namespace trace_api      = ot::trace;
 namespace trace_sdk      = ot::sdk::trace;
 namespace trace_exporter = ot::exporter::trace;
 namespace otlp 	         = ot::exporter::otlp;
 namespace nostd          = ot::nostd;
 namespace resource       = ot::sdk::resource;
+namespace metric_api	 = ot::metrics;
+namespace metric_sdk	 = ot::sdk::metrics;
 
-std::string otlpEndpoint() {
-    const char* endpoint = std::getenv("OTLP_ENDPOINT");
-    if (endpoint)
-        return std::string(endpoint);
-    else
-        return "localhost:4317";
-}
+std::string otlpEndpoint();
 
 // Tracing helper functions
+void initTracer(std::string serviceName, std::string hostName);
+void cleanupTracer();
+nostd::shared_ptr<trace_api::Span> getSpan(std::string libName, std::string spanName);
 
-void initTracer(std::string serviceName, std::string hostName) {
-	// Create OTLP exporter instance
-	otlp::OtlpGrpcExporterOptions opts;
-	opts.endpoint = otlpEndpoint();
-	auto exporter = otlp::OtlpGrpcExporterFactory::Create(opts);
-	auto processor = std::unique_ptr<trace_sdk::SpanProcessor>(
-		new trace_sdk::SimpleSpanProcessor(std::move(exporter))
-	);
-
-	resource::ResourceAttributes attributes = {
-		{resource::SemanticConventions::kServiceName, serviceName},
-		{resource::SemanticConventions::kHostName, hostName}
-	};
-	auto resource = resource::Resource::Create(attributes);
-
-	std::shared_ptr<trace_api::TracerProvider> provider 
-		= trace_sdk::TracerProviderFactory::Create(std::move(processor), std::move(resource));
-
-	// Set global trace provider
-	trace_api::Provider::SetTracerProvider(provider);
-}
-
-void cleanupTracer() {
-	std::shared_ptr<trace_api::TracerProvider> none;
-	trace_api::Provider::SetTracerProvider(none);
-}
-
-nostd::shared_ptr<trace_api::Span> getSpan(std::string libName, std::string spanName) {
-	auto provider = trace_api::Provider::GetTracerProvider();
-	auto tracer = provider->GetTracer(libName, OPENTELEMETRY_SDK_VERSION);
-    return tracer->StartSpan(spanName);
-}
+// Metrics helper functions
+void initMetrics();
+void cleanupMetrics();
 
 
 #endif // OTEL_HPP_INCLUDED
