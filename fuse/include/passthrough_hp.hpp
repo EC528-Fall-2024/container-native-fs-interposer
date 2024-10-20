@@ -46,7 +46,7 @@ static_assert(sizeof(fuse_ino_t) >= sizeof(uint64_t),
 
 /* Forward declarations */
 struct Inode;
-static Inode& get_inode(fuse_ino_t ino);
+Inode& get_inode(fuse_ino_t ino);
 static void forget_one(fuse_ino_t ino, uint64_t n);
 
 // Uniquely identifies a file in the source directory tree. This could
