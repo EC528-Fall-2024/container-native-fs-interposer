@@ -1,9 +1,9 @@
-//x#include <cstdio>
+#include <cstdio>
 #include <unistd.h>
 #include <iostream>
 
 int main(){
-    std::cout << ("Hello World\n") << std::endl;
+    std::cout << "Hello World\n" << std::endl;
     sleep(10);
     int i = 0;
     while(i != 100){

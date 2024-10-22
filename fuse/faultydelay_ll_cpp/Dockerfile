@@ -47,7 +47,7 @@ RUN cd fuse-3.16.2
 
 #name executable and run it 
 # Build the FUSE application (if applicable)
-RUN gpp -o my_fuse_app test.cpp 
+RUN g++ -o my_fuse_app test.cpp 
 #[-I/include/path]
 
 # Run the FUSE application when the container starts
