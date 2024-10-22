@@ -99,6 +99,14 @@ The FUSE library provides a mechanism and an API for implementing full-fledged f
 
 Applications are now often deployed in container native environments, such as Kubernetes.  In Kubernetes, storage is provided to workloads (“pods”) via volumes (“persistent volumes, PVs”) that are usually formatted with a file system such as ext4 or xfs.  To use a FUSE-based stackable utility file system with these volumes and workloads, some integration with Kubernetes is required. As shown in the diagram, this integration will be implemented by a CSI node plugin.
 
+#### Architecture of the CSI plugin
+
+##### Generic CSI Architecture
+![](./images/csi-arch-rev1.png)
+
+##### CSI sidecar Architecture to allow volume stacking
+![](./images/csi-sidecar.png)
+
 ### Design Discussion
 
 1. FUSE itself may introduce too much noise/overhead. This will be evaluated by running expriments with data-intensive applications.
