@@ -1,0 +1,13 @@
+### Reason why using fuse_lowlevel.h instead of fuse.h
+low level api is asynchronous while high level is synchronous. 
+we need threading to do I/O throttling for later
+
+Current working will only support single thread. which is just to really get familia with fuse_lowlevel.h 
+
+
+1) initialize low_level filesystem operations ->> struct fuse_lowlevel_ops
+2) initialize low level session. ->> fuse_session_new()
+3) set up signal handler ->> fuse_set_signal_handlers(se)
+4) session Mount File System ->> fuse_session_mount()
+5) enter eventloop ->> fuse_session_loop()
+6) session Umount fs ->> fuse_session_destroy(), fuse_session_exit()
