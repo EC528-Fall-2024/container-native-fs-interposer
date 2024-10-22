@@ -50,12 +50,11 @@
 #endif
 
 // C includes
-#include "passthrough_hp.hpp"
 #include <dirent.h>
 #include <err.h>
 #include <errno.h>
 #include <ftw.h>
-#include <fuse_lowlevel.h>
+#include <fuse3/fuse_lowlevel.h>
 #include <inttypes.h>
 #include <string.h>
 #include <sys/file.h>
@@ -65,6 +64,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <limits.h>
+#include <signal.h>
 
 // C++ includes
 #include <cstddef>
@@ -76,73 +76,26 @@
 #include <fstream>
 #include <thread>
 #include <iomanip>
+#include <vector>
+#include <queue>
+#include <memory>
+#include <cstdint>
+#include <chrono>
+#include <condition_variable>
+#include <atomic>
+#include <functional>
+#include <algorithm>
+
+
+//IO throttle includes
+#include <atomic>
+#include <chrono>
+
+#include "TockenBucket.hpp"
+
+#include "passthrough_hp.hpp"
 
 using namespace std;
-
-
-// #define SFS_DEFAULT_THREADS "-1" // take libfuse value as default
-// #define SFS_DEFAULT_CLONE_FD "0"
-
-// /* We are re-using pointers to our `struct sfs_inode` and `struct
-//    sfs_dirp` elements as inodes and file handles. This means that we
-//    must be able to store pointer a pointer in both a fuse_ino_t
-//    variable and a uint64_t variable (used for file handles). */
-// static_assert(sizeof(fuse_ino_t) >= sizeof(void*),
-//               "void* must fit into fuse_ino_t");
-// static_assert(sizeof(fuse_ino_t) >= sizeof(uint64_t),
-//               "fuse_ino_t must be at least 64 bits");
-
-
-// /* Forward declarations */
-// struct Inode;
-// static Inode& get_inode(fuse_ino_t ino);
-// static void forget_one(fuse_ino_t ino, uint64_t n);
-
-// // Uniquely identifies a file in the source directory tree. This could
-// // be simplified to just ino_t since we require the source directory
-// // not to contain any mountpoints. This hasn't been done yet in case
-// // we need to reconsider this constraint (but relaxing this would have
-// // the drawback that we can no longer re-use inode numbers, and thus
-// // readdir() would need to do a full lookup() in order to report the
-// // right inode number).
-// typedef std::pair<ino_t, dev_t> SrcId;
-
-// // Define a hash function for SrcId
-// namespace std {
-//     template<>
-//     struct hash<SrcId> {
-//         size_t operator()(const SrcId& id) const {
-//             return hash<ino_t>{}(id.first) ^ hash<dev_t>{}(id.second);
-//         }
-//     };
-// }
-
-// // Maps files in the source directory tree to inodes
-// typedef std::unordered_map<SrcId, Inode> InodeMap;
-
-// struct Inode {
-//     int fd {-1};
-//     dev_t src_dev {0};
-//     ino_t src_ino {0};
-//     int generation {0};
-//     uint64_t nopen {0};
-//     uint64_t nlookup {0};
-//     std::mutex m;
-
-//     // Delete copy constructor and assignments. We could implement
-//     // move if we need it.
-//     Inode() = default;
-//     Inode(const Inode&) = delete;
-//     Inode(Inode&& inode) = delete;
-//     Inode& operator=(Inode&& inode) = delete;
-//     Inode& operator=(const Inode&) = delete;
-
-//     ~Inode() {
-//         if(fd > 0)
-//             close(fd);
-//     }
-// };
-
 
 #define FUSE_BUF_COPY_FLAGS                      \
         (fs.nosplice ?                           \
@@ -171,6 +124,14 @@ static int get_fs_fd(fuse_ino_t ino) {
 
 static void sfs_init(void *userdata, fuse_conn_info *conn) {
     (void)userdata;
+
+    if(!setup_timer()) {
+        std::cerr << "Failed to setup timer for token replenishment" << std::endl;
+        exit(1);
+    } else {
+        std::cout << "Token replenishment timer set up successfully" << std::endl;
+    }
+
     if (conn->capable & FUSE_CAP_EXPORT_SUPPORT)
         conn->want |= FUSE_CAP_EXPORT_SUPPORT;
 
@@ -924,6 +885,23 @@ static void do_read(fuse_req_t req, size_t size, off_t off, fuse_file_info *fi) 
 static void sfs_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                      fuse_file_info *fi) {
     (void) ino;
+
+    auto bucket = std::make_shared<TokenBucket>(size, initialtoken);
+    
+    {
+        std::lock_guard<std::mutex> lock(active_buckets_mutex);
+        active_buckets.push_back(bucket);
+    }
+    
+    while (!bucket->enough_tokens()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    
+    {
+        std::lock_guard<std::mutex> lock(active_buckets_mutex);
+        active_buckets.erase(std::remove(active_buckets.begin(), active_buckets.end(), bucket), active_buckets.end());
+    }
+
     do_read(req, size, off, fi);
 }
 
@@ -948,6 +926,23 @@ static void sfs_write_buf(fuse_req_t req, fuse_ino_t ino, fuse_bufvec *in_buf,
                           off_t off, fuse_file_info *fi) {
     (void) ino;
     auto size {fuse_buf_size(in_buf)};
+
+    auto bucket = std::make_shared<TokenBucket>(size, initialtoken);
+    
+    {
+        std::lock_guard<std::mutex> lock(active_buckets_mutex);
+        active_buckets.push_back(bucket);
+    }
+    
+    while (!bucket->enough_tokens()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    
+    {
+        std::lock_guard<std::mutex> lock(active_buckets_mutex);
+        active_buckets.erase(std::remove(active_buckets.begin(), active_buckets.end(), bucket), active_buckets.end());
+    }
+    
     do_write_buf(req, size, off, in_buf, fi);
 }
 
