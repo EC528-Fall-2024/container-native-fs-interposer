@@ -5,7 +5,7 @@
 	In the functions lo_read(), lo_write_buf(), lo_getattr(), lo_setattr(), and lo_fsync() I introduced randomized io errors, data truncation, and delays.
 	I also created a helper function to write to a log that will track when these errors have occured, so that we have a concrete artifact to compare against that documented all the errors
 
-	gcc -Wall -D_FILE_OFFSET_BITS=64 passthrough_ll.c `pkg-config fuse3 --cflags --libs` -o passthrough_ll
+	gcc -Wall -D_FILE_OFFSET_BITSl=64 faulty_ll.c `pkg-config fuse3 --cflags --libs` -o faulty_ll
 	docker build -t my-fuse-app .
 	kubectl apply -f fuse-faulty.yaml
 	kubectl get pods
