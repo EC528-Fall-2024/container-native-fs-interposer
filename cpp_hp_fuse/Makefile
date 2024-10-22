@@ -1,7 +1,5 @@
-# Compiler
 CXX = g++
 
-# Common compiler flags
 COMMON_FLAGS = -Wall -Wextra -g
 
 # Filesystem-specific flags (C++11)
