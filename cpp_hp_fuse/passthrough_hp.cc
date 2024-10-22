@@ -97,208 +97,25 @@
 #include <atomic>
 #include <chrono>
 
+#include "TockenBucket.hpp"
+
 using namespace std;
 
 #define SFS_DEFAULT_THREADS "-1" // take libfuse value as default
 #define SFS_DEFAULT_CLONE_FD "0"
 
-//IO throttle data structure
-
-#define tokenTroughput  1 << 10
-#define initialtoken 10 
-
-enum Request_type{
-    SLICE = 1 << 0,
-    JOB = 1 << 1,
-};
-
-struct Request {
-    uint64_t size;
-    uint64_t offset;
-    fuse_file_info fi;
-    fuse_bufvec *buf;
-
-    Request_type type;
-
-    //if a task is from a same TokenBucket, they should have the same fuse_bufvec addr
-};
-
-//each task will automaticly turn in to smaller task if it is bigger than a 'token size'
-//so write function will now instead of calling any function, it should create a TockenBucket struct
-class TokenBucket {
-
-    private :
-        fuse_req_t req; 
-        std::atomic<uint64_t> token;
-        off_t offset;
-        size_t size;
-        fuse_bufvec *buf;
-        std::queue<Request> pendingSlices;
-        std::queue<Request> readySlices;
-        struct fuse_file_info fi;
-        mutable std::mutex mutex;
-
-
-    public : 
-
-        TokenBucket(fuse_req_t req, size_t size, off_t offset, const fuse_file_info& fi, uint64_t initial) 
-            : req(req), token(initial), offset(offset), size(size), fi(fi) {
-                split_request(size, offset);
-            }
-    
-        void process_slices() {
-            std::lock_guard<std::mutex> lock(mutex);
-            while(!pendingSlices.empty() && token > 0) {
-                readySlices.push(pendingSlices.front());
-                pendingSlices.pop();
-                --token;
-            }
-        }
-
-        bool has_ready_slices() const {
-            std::lock_guard<std::mutex> lock(mutex);
-            return !readySlices.empty();
-        }
-            
-        Request get_next_ready_slice() {
-            std::lock_guard<std::mutex> lock(mutex);
-            if(readySlices.empty()) {
-                throw std::runtime_error("No ready slices");
-            }
-            Request slice = readySlices.back();
-            readySlices.pop();
-            return slice;
-        }
-
-        bool is_complete() const {
-            std::lock_guard<std::mutex> lock(mutex);
-            return pendingSlices.empty() && readySlices.empty();
-        }
-
-        void add_tokens(uint64_t count = 1) {
-            token += count;
-        }
-
-    private :
-        void split_request(size_t size, off_t offset) {
-            std::lock_guard<std::mutex> lock(mutex);
-            while( size > 0) {
-                   size_t chunk_size = std::min(static_cast<size_t>(size), static_cast<size_t>(tokenTroughput));
-                   pendingSlices.push(Request{chunk_size, static_cast<uint64_t>(offset), fi, buf, Request_type::SLICE});
-                   size -= chunk_size;
-                   offset += chunk_size;
-            }
-        }
-
-};
-
-std::vector<std::shared_ptr<TokenBucket>> active_buckets;
-std::mutex active_buckets_mutex;
-std::atomic<bool> should_replenish(false);
-
-void signal_handler(int signum) {
-    (void)signum;
-    should_replenish.store(true, std::memory_order_release);
-}
-
-void replenish_tokens(std::vector<std::shared_ptr<TokenBucket>>& active_buckets, uint64_t tokens_to_add) {
-    for (auto& bucket : active_buckets) {
-        bucket->add_tokens();
-        bucket->process_slices();
+void replenish_tokens(std::vector<std::shared_ptr<TokenBucket>> &buckets, uint64_t count) {
+    for (auto& bucket : buckets) {
+        bucket->add_tokens(count);
     }
 }
 
-void process_request() {
-    std::lock_guard<std::mutex> lock(active_buckets_mutex);
-    active_buckets.erase( 
-        std::remove_if(active_buckets.begin(), active_buckets.end(),
-            [](const auto& bucket) {return bucket->is_complete(); }),
-            active_buckets.end());
-
-    for(auto& bucket : active_buckets) {
-        while (bucket->has_ready_slices()) {
-            Request slice = bucket->get_next_ready_slice();
-            //TODO: process the slice
-            //.....
-        }
-    }
-}
-
-
-bool setup_timer() {
-    struct sigaction sa;
-    struct itimerspec its;
-    struct sigevent sev;
-    timer_t timerid;
-    
-    sa.sa_handler = signal_handler;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
-    if (sigaction(SIGRTMIN, &sa, nullptr) == -1) {
-        std::cerr << "Error: sigaction falied " << strerror(errno) << std::endl;
-        return false;
-    }
-
-    sev.sigev_notify = SIGEV_SIGNAL;
-    sev.sigev_signo = SIGRTMIN;
-    sev.sigev_value.sival_ptr = &timerid;
-    if (timer_create(CLOCK_REALTIME, &sev, &timerid) == -1 ) {
-        std::cerr << "Error: timer_create failed: " << strerror(errno) << std::endl;
-        return false;
-    }
-
-    its.it_value.tv_nsec = 0;
-    its.it_value.tv_sec = 1;
-    its.it_interval.tv_sec = 1;
-    its.it_interval.tv_nsec = 0;
-
-    if (timer_settime(timerid, 0, &its, nullptr) == -1) {
-        std::cerr << "Error: timer_settime failed: " << strerror(errno) << std::endl;
-    }
-
-    return true;
-}
-
-
-
-//There should be only one manager(????) in a passthrough file syste
-//all it does is sending read/write request to the underlying fs
-//manager should also check if there is any Tockenbucket left
-//and call retry fucntion ever once a while
-//class Manager {
-//    private :
-//        std::unique_ptr<std::queue<Request>> job_queue;
-//        std::vector<std::shared_ptr<TokenBucket>> tokenbuckets;
-//        std::mutex job_queue_mutex;
-//        std::mutex buckets_mutex;
-//    public :
-//        Manager() : job_queue(std::make_unique<std::queue<Request>>()) {}
-//    
-//        std::shared_ptr<TokenBucket> create_token_bucket(fuse_req_t req, size_t size, off_t offset, const fuse_file_info& fi, uint64_t initial) {
-//            auto push_callback = [this](const Request& req) {
-//                std::lock_guard<std::mutex> lock(job_queue_mutex);
-//                job_queue->push(req);
-//            };
-//
-//            auto bucket = std::make_shared<TokenBucket>(req, size, offset, fi, initial, push_callback);
-//
-//            std::lock_guard<std::mutex> lock(job_queue_mutex);
-//            tokenbuckets.push_back(bucket);
-//            
-//            return bucket;
-//        }
-//
-//        void porcess_request() {
-//            while(!job_queue->empty()) {
-//                auto request = job_queue->front();
-//                //TODO :process the request
-//                
-//                job_queue->pop();
-//            }
-//        }
-//};
-
-//std::queue<struct request> job_queue;
+// void signal_handler(int signum) {
+//     (void)signum;
+//     std::lock_guard<std::mutex> lock(active_buckets_mutex);
+//     replenish_tokens(active_buckets, 1);
+//     // process_request();
+// }
 
 
 /* We are re-using pointers to our `struct sfs_inode` and `struct
@@ -833,7 +650,7 @@ static void sfs_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup) {
 
 static void sfs_forget_multi(fuse_req_t req, size_t count,
                              fuse_forget_data *forgets) {
-    for (int i = 0; i < count; i++)
+    for (long unsigned int i = 0; i < count; i++)
         forget_one(forgets[i].ino, forgets[i].nlookup);
     fuse_reply_none(req);
 }
@@ -1173,7 +990,25 @@ static void do_read(fuse_req_t req, size_t size, off_t off, fuse_file_info *fi) 
 
 static void sfs_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                      fuse_file_info *fi) {
+
     (void) ino;
+
+    auto bucket = std::make_shared<TokenBucket>(size, initialtoken);
+    
+    {
+        std::lock_guard<std::mutex> lock(active_buckets_mutex);
+        active_buckets.push_back(bucket);
+    }
+    
+    while (!bucket->enough_tokens()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    
+    {
+        std::lock_guard<std::mutex> lock(active_buckets_mutex);
+        active_buckets.erase(std::remove(active_buckets.begin(), active_buckets.end(), bucket), active_buckets.end());
+    }
+    
     do_read(req, size, off, fi);
 }
 
@@ -1588,7 +1423,7 @@ int main(int argc, char *argv[]) {
     // Mount and run main loop
     loop_config = fuse_loop_cfg_create();
 
-    if (fs.num_threads != -1)
+    if ((int)fs.num_threads != -1)
         fuse_loop_cfg_set_idle_threads(loop_config, fs.num_threads);
 
     if (fuse_session_mount(se, argv[2]) != 0)
