@@ -44,7 +44,7 @@ spec:
             - --access-key=minioadmin
             - --secret-key=minioadmin
             - --autoterm
-            - --objects=100
+            - --objects=5
       volumes:
         - name: data
           csi:
