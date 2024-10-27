@@ -3,12 +3,25 @@ FROM ubuntu:20.04
 
 # Install required packages including libfuse
 RUN apt-get update && apt-get install -y \
-    gcc gpp make fuse3 libfuse-dev\
+    gcc g++ make fuse3 libfuse-dev \
     && rm -rf /var/lib/apt/lists/*
 
+RUN apt-get update && apt-get install -y \
+    cmake\
+    && echo America && echo New_York\
+    && rm -rf /var/lib/apt/lists/*
 
 RUN apt-get update && apt-get install -y \
-    libfuse2 build-essential meson ninja-build signify-openbsd python3 python3-pip\
+    php\
+    && echo America && echo New_York\
+    && rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update && apt-get install -y \
+    libudev-dev libevdev-dev libsystemd-dev libglib2.0-dev libjson-glib-dev libunistring-dev check valgrind swig\
+    && rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update && apt-get install -y \
+    libfuse2 pkg-config build-essential meson ninja-build signify-openbsd python3 python3-pip\
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip3 install pytest
@@ -47,7 +60,7 @@ RUN cd fuse-3.16.2
 
 #name executable and run it 
 # Build the FUSE application (if applicable)
-RUN g++ -o my_fuse_app test.cpp 
+RUN g++ -o my_fuse_app -I//usr/local/include/fuse3 test.cpp 
 #[-I/include/path]
 
 # Run the FUSE application when the container starts

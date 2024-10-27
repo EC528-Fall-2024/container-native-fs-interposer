@@ -7,6 +7,13 @@
 
 	gpp -Wall -D_FILE_OFFSET_BITSl=64 faulty_ll.c `pkg-config fuse3 --cflags --libs` -o faulty_ll
 	docker build -t my-fuse-app .
+	docker images //list images
+	docker rmi <image_name> //remove image
+	docker create --name fuse-container my-fuse-app
+	docker start fuse-container
+	docker exec -it fuse-container sh
+
+	//Kube commands
 	kubectl apply -f fuse-faulty.yaml
 	kubectl get pods
 	kubectl logs fuse-faulty
@@ -69,6 +76,18 @@
 #include <sys/xattr.h>
 #include <time.h>
 #include <iostream>
+#include <stdarg.h>
+
+// #include <opentelemetry/sdk/logs/simple_log_processor.h>
+// #include <opentelemetry/sdk/logs/log_record.h>
+// #include <opentelemetry/sdk/logs/logger_provider.h>
+// #include <opentelemetry/exporters/otlp/otlp_grpc_log_exporter.h>
+// #include <opentelemetry/logs/provider.h>
+// #include <opentelemetry/logs/logger.h>
+#include <chrono>
+#include <iomanip>
+#include <ctime>
+#include <sstream>
 
 //#include "passthrough_helpers.h"
 
@@ -159,7 +178,45 @@ static void passthrough_ll_help(void)
 "    -o cache=always        Cache always\n" << std::endl;
 }
 
-//Helper function for logging errors
+//Helper functions for logging errors:
+/*
+//Otel init
+bool otel_is_init = false;
+void otel_init(){
+	auto exporter = std::make_shared<opentelemetry::exporter::otlp::OtlpGrpcLogExporter>();
+    auto processor = std::make_shared<opentelemetry::sdk::logs::SimpleLogProcessor>(exporter);
+    auto provider = std::make_shared<opentelemetry::sdk::logs::LoggerProvider>();
+    provider->AddProcessor(processor);
+    opentelemetry::logs::Provider::SetLoggerProvider(provider);
+
+    return 0;
+}
+
+// Function to get the current timestamp
+std::string getCurrentTime(){
+    auto now = std::chrono::system_clock::now();
+    std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
+    std::stringstream ss;
+    ss << std::put_time(std::localtime(&currentTime), "%Y-%m-%d %H:%M:%S");
+    return ss.str();//returns formatted string of timestamp
+}
+
+// Function to log an error using OpenTelemetry
+void logError(const std::string &error_message){
+	if(!otel_is_init){
+		otel_init();
+		otel_is_init = true;
+	}
+	// Get the otel logger
+    auto logger_provider = opentelemetry::logs::Provider::GetLoggerProvider();
+    auto logger = logger_provider->GetLogger("faulty_fs-logger");
+
+    // Log an error with a timestamp
+    logger->EmitLogRecord(opentelemetry::logs::Severity::kError, getCurrentTime() + ": " + error_message);
+	return;
+}
+*/
+//local file logging
 void log_error(const char *error_message, const char *file_name) {
     // Open the file in append mode ("a"), creates it if it doesn't exist
     FILE *file = fopen(file_name, "a");
@@ -183,8 +240,6 @@ void log_error(const char *error_message, const char *file_name) {
     // Close the file
     fclose(file);
 }
-
-
 
 static struct lo_data *lo_data(fuse_req_t req)
 {
