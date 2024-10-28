@@ -34,33 +34,24 @@ WORKDIR /usr/src/myapp
 #Verify tarball w signify
 RUN signify-openbsd -V -m libfuse/fuse-3.16.2.tar.gz -p libfuse/fuse-3.16.pub
 
+RUN tar xzf libfuse/fuse-3.16.2.tar.gz 
+
 #unpack tarball and setu libfuse build with meson
-RUN tar xzf libfuse/fuse-3.16.2.tar.gz
-RUN cd fuse-3.16.2
+RUN cd fuse-3.16.2 \
+    && meson setup build \
+    && ninja -C build install
 
-# RUN meson setup build
+RUN mkdir mountpoint \
+    && g++ -Wall -D_FILE_OFFSET_BITSl=64 faulty_ll.cpp -I//usr/local/include/fuse3 `pkg-config fuse3 --cflags --libs` -o faulty_ll \
+    && ldconfig \
+    && mkdir testmount
 
-# #RUN mkdir build 
-# RUN cd build
-# #RUN meson setup ..
-
-# #RUN meson setup build
-# # RUN cd build
-# RUN meson compile
-# RUN cd ..
-# RUN ninja -C build install
-
-# #Build libfuse, test it, and install it
-# RUN meson compile
-# #RUN sudo chown root:root util/fusermount3
-# #RUN sudo chmod 4755 util/fusermount3
-# RUN pwd
-# #RUN python3 -m pytest ~/libfuse/fuse-3.16.2/test/
-# RUN ninja install
+#in the shell all i need to do is mount it to mountpoint
 
 #name executable and run it 
 # Build the FUSE application (if applicable)
 RUN g++ -o my_fuse_app -I//usr/local/include/fuse3 test.cpp 
+#g++ -Wall -D_FILE_OFFSET_BITSl=64 faulty_ll.cpp -I//usr/local/include/fuse3 `pkg-config fuse3 --cflags --libs` -o faulty_ll
 #[-I/include/path]
 
 # Run the FUSE application when the container starts

@@ -5,13 +5,14 @@
 	In the functions lo_read(), lo_write_buf(), lo_getattr(), lo_setattr(), and lo_fsync() I introduced randomized io errors, data truncation, and delays.
 	I also created a helper function to write to a log that will track when these errors have occured, so that we have a concrete artifact to compare against that documented all the errors
 
-	gpp -Wall -D_FILE_OFFSET_BITSl=64 faulty_ll.c `pkg-config fuse3 --cflags --libs` -o faulty_ll
+	g++ -Wall -D_FILE_OFFSET_BITSl=64 faulty_ll.cpp -I//usr/local/include/fuse3 `pkg-config fuse3 --cflags --libs` -o faulty_ll
 	docker build -t my-fuse-app .
 	docker images //list images
 	docker rmi <image_name> //remove image
-	docker create --name fuse-container my-fuse-app
+	docker create --privileged -v /dev/fuse:/dev/fuse --name fuse-container my-fuse-app
 	docker start fuse-container
 	docker exec -it fuse-container sh
+	//then mount to mountpoint and cd until testmount to test IO, errors logged on local text file in mountpoint/
 
 	//Kube commands
 	kubectl apply -f fuse-faulty.yaml
@@ -55,8 +56,7 @@
  * \include faulty_ll.c
  */
 
-#define _GNU_SOURCE
-#define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 12)
+#define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 16)
 #define ERRLOGFILE "error_log.txt" //for function calls to the error log
 
 #include <fuse_lowlevel.h>
@@ -78,6 +78,8 @@
 #include <iostream>
 #include <stdarg.h>
 
+#include "libfuse/passthrough_helpers.h"
+
 // #include <opentelemetry/sdk/logs/simple_log_processor.h>
 // #include <opentelemetry/sdk/logs/log_record.h>
 // #include <opentelemetry/sdk/logs/logger_provider.h>
@@ -88,8 +90,6 @@
 #include <iomanip>
 #include <ctime>
 #include <sstream>
-
-//#include "passthrough_helpers.h"
 
 /* We are re-using pointers to our `struct lo_inode` and `struct
    lo_dirp` elements as inodes. This means that we must be able to
@@ -282,7 +282,9 @@ static void lo_init(void *userdata,
 	}
 
 	/* Disable the receiving and processing of FUSE_INTERRUPT requests */
+	#ifdef FUSE_HAS_NO_INTERRUPT
 	conn->no_interrupt = 1;
+	#endif
 }
 
 static void lo_destroy(void *userdata)
@@ -451,7 +453,7 @@ static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 		struct lo_inode *prev, *next;
 
 		saverr = ENOMEM;
-		inode = calloc(1, sizeof(struct lo_inode));
+		inode = static_cast<struct lo_inode *>(calloc(1, sizeof(struct lo_inode)));
 		if (!inode)
 			goto out_err;
 
@@ -665,7 +667,7 @@ static void lo_forget_one(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
 	unref_inode(lo, inode, nlookup);
 }
 
-static void lo_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
+static void lo_forget(fuse_req_t req, fuse_ino_t ino, unsigned long nlookup)
 {
 	lo_forget_one(req, ino, nlookup);
 	fuse_reply_none(req);
@@ -674,7 +676,7 @@ static void lo_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
 static void lo_forget_multi(fuse_req_t req, size_t count,
 				struct fuse_forget_data *forgets)
 {
-	int i;
+	size_t i;
 
 	for (i = 0; i < count; i++)
 		lo_forget_one(req, forgets[i].ino, forgets[i].nlookup);
@@ -716,7 +718,7 @@ static void lo_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi
 	struct lo_dirp *d;
 	int fd;
 
-	d = calloc(1, sizeof(struct lo_dirp));
+	d = static_cast<struct lo_dirp *>(calloc(1, sizeof(struct lo_dirp)));
 	if (d == nullptr)
 		goto out_err;
 
@@ -765,7 +767,7 @@ static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 
 	(void) ino;
 
-	buf = calloc(1, size);
+	buf = static_cast<char *>(calloc(1, size));
 	if (!buf) {
 		err = ENOMEM;
 		goto error;
@@ -800,10 +802,8 @@ static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 		if (plus) {
 			struct fuse_entry_param e;
 			if (is_dot_or_dotdot(name)) {
-				e = (struct fuse_entry_param) {
-					.attr.st_ino = d->entry->d_ino,
-					.attr.st_mode = d->entry->d_type << 12,
-				};
+				e.attr.st_ino = d->entry->d_ino;
+    			e.attr.st_mode = d->entry->d_type << 12;
 			} else {
 				err = lo_do_lookup(req, ino, name, &e);
 				if (err)
@@ -816,7 +816,7 @@ static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 		} else {
 			struct stat st = {
 				.st_ino = d->entry->d_ino,
-				.st_mode = d->entry->d_type << 12,
+				.st_mode = static_cast<unsigned int>(d->entry->d_type << 12),
 			};
 			entsize = fuse_add_direntry(req, p, rem, name,
 						    &st, nextoff);
@@ -1031,7 +1031,7 @@ static void lo_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 		fuse_log(FUSE_LOG_DEBUG, "lo_read(ino=%" PRIu64 ", size=%zd, "
 			"off=%lu)\n", ino, size, (unsigned long) offset);
 
-	buf.buf[0].flags = FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK;
+	buf.buf[0].flags = static_cast<fuse_buf_flags>(FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK);
 	buf.buf[0].fd = fi->fh;
 	buf.buf[0].pos = offset;
 
@@ -1053,11 +1053,12 @@ static void lo_write_buf(fuse_req_t req, fuse_ino_t ino,
     }
 
 	//simulate truncated write
+	struct fuse_bufvec out_buf;
 	if (rand() % 10 == 0) {
-		struct fuse_bufvec out_buf = FUSE_BUFVEC_INIT(fuse_buf_size(in_buf)/2);	//buf size cut in half
+		out_buf = FUSE_BUFVEC_INIT(fuse_buf_size(in_buf)/2);	//buf size cut in half
 		log_error("lo_write_buf: An unexpected truncation occurred", ERRLOGFILE);
 	}else{
-		struct fuse_bufvec out_buf = FUSE_BUFVEC_INIT(fuse_buf_size(in_buf));
+		out_buf = FUSE_BUFVEC_INIT(fuse_buf_size(in_buf));
 	}
 
 	//simulate delayed io
@@ -1066,7 +1067,7 @@ static void lo_write_buf(fuse_req_t req, fuse_ino_t ino,
 		log_error("lo_write_buf: An unexpected delay occurred", ERRLOGFILE);
     }
 
-	out_buf.buf[0].flags = FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK;
+	out_buf.buf[0].flags = static_cast<fuse_buf_flags>(FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK);
 	out_buf.buf[0].fd = fi->fh;
 	out_buf.buf[0].pos = off;
 
@@ -1074,7 +1075,7 @@ static void lo_write_buf(fuse_req_t req, fuse_ino_t ino,
 		fuse_log(FUSE_LOG_DEBUG, "lo_write(ino=%" PRIu64 ", size=%zd, off=%lu)\n",
 			ino, out_buf.buf[0].size, (unsigned long) off);
 
-	res = fuse_buf_copy(&out_buf, in_buf, 0);
+	res = fuse_buf_copy(&out_buf, in_buf, static_cast<fuse_buf_copy_flags>(0));
 	if(res < 0)
 		fuse_reply_err(req, -res);
 	else
@@ -1148,7 +1149,8 @@ static void lo_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 	sprintf(procname, "/proc/self/fd/%i", inode->fd);
 
 	if (size) {
-		value = malloc(size);
+		value = static_cast<char *>(malloc(size));
+		
 		if (!value)
 			goto out_err;
 
@@ -1198,7 +1200,7 @@ static void lo_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 	sprintf(procname, "/proc/self/fd/%i", inode->fd);
 
 	if (size) {
-		value = malloc(size);
+		value = static_cast<char *>(malloc(size));
 		if (!value)
 			goto out_err;
 
@@ -1321,37 +1323,53 @@ static const struct fuse_lowlevel_ops lo_oper = {
 	.init		= lo_init,
 	.destroy	= lo_destroy,
 	.lookup		= lo_lookup,
-	.mkdir		= lo_mkdir,
-	.mknod		= lo_mknod,
-	.symlink	= lo_symlink,
-	.link		= lo_link,
-	.unlink		= lo_unlink,
-	.rmdir		= lo_rmdir,
-	.rename		= lo_rename,
 	.forget		= lo_forget,
-	.forget_multi	= lo_forget_multi,
 	.getattr	= lo_getattr,
 	.setattr	= lo_setattr,
 	.readlink	= lo_readlink,
+	.mknod		= lo_mknod,
+	.mkdir		= lo_mkdir,
+	.unlink		= lo_unlink,
+	.rmdir		= lo_rmdir,
+	.symlink	= lo_symlink,
+	.rename		= lo_rename,
+	.link		= lo_link,
+	.open		= lo_open,
+	.read		= lo_read,
+	//.write?
+	.flush		= lo_flush,
+	.release	= lo_release,
+	.fsync		= lo_fsync,
 	.opendir	= lo_opendir,
 	.readdir	= lo_readdir,
-	.readdirplus	= lo_readdirplus,
 	.releasedir	= lo_releasedir,
 	.fsyncdir	= lo_fsyncdir,
-	.create		= lo_create,
-	.open		= lo_open,
-	.release	= lo_release,
-	.flush		= lo_flush,
-	.fsync		= lo_fsync,
-	.read		= lo_read,
-	.write_buf      = lo_write_buf,
 	.statfs		= lo_statfs,
-	.fallocate	= lo_fallocate,
-	.flock		= lo_flock,
+	.setxattr	= lo_setxattr,
 	.getxattr	= lo_getxattr,
 	.listxattr	= lo_listxattr,
-	.setxattr	= lo_setxattr,
 	.removexattr	= lo_removexattr,
+	//.access?
+	.create		= lo_create,
+	//.getlk?
+	//.setlk?
+	//.bmap?
+	//.ioctl?
+	//.poll?
+	.write_buf      = lo_write_buf,
+	//.retrieve_reply?
+	.forget_multi	= lo_forget_multi,
+	.flock		= lo_flock,
+	.fallocate	= lo_fallocate,
+	//.reserved00
+	//.reserved01
+	//.reserved02
+	//.renamex
+	//.setvolname
+	//.exchange
+	//.getxtimes
+	//.setattr_x
+	.readdirplus	= lo_readdirplus,
 #ifdef HAVE_COPY_FILE_RANGE
 	.copy_file_range = lo_copy_file_range,
 #endif
