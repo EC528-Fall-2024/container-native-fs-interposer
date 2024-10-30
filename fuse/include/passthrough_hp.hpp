@@ -7,7 +7,7 @@
 #include <err.h>
 #include <errno.h>
 #include <ftw.h>
-#include <fuse3/fuse_lowlevel.h>
+#include <fuse_lowlevel.h>
 #include <inttypes.h>
 #include <string.h>
 #include <sys/file.h>

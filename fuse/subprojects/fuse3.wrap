@@ -1,0 +1,8 @@
+[wrap-file]
+directory = libfuse-fuse-3.16.2
+source_url = https://github.com/libfuse/libfuse/archive/refs/tags/fuse-3.16.2.tar.gz
+source_filename = fuse-3.16.2.tar.gz
+source_hash = 1bc306be1a1f4f6c8965fbdd79c9ccca021fdc4b277d501483a711cbd7dbcd6c
+
+[provide]
+fuse3 = libfuse_dep
