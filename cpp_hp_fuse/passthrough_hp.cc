@@ -97,26 +97,12 @@
 #include <atomic>
 #include <chrono>
 
-#include "TockenBucket.hpp"
+#include "TokenBucket.hpp"
 
 using namespace std;
 
 #define SFS_DEFAULT_THREADS "-1" // take libfuse value as default
 #define SFS_DEFAULT_CLONE_FD "0"
-
-void replenish_tokens(std::vector<std::shared_ptr<TokenBucket>> &buckets, uint64_t count) {
-    for (auto& bucket : buckets) {
-        bucket->add_tokens(count);
-    }
-}
-
-// void signal_handler(int signum) {
-//     (void)signum;
-//     std::lock_guard<std::mutex> lock(active_buckets_mutex);
-//     replenish_tokens(active_buckets, 1);
-//     // process_request();
-// }
-
 
 /* We are re-using pointers to our `struct sfs_inode` and `struct
    sfs_dirp` elements as inodes and file handles. This means that we
@@ -198,8 +184,7 @@ struct Fs {
     bool direct_io;
 
     //data structure for IO throttle
-    //RateLimiter *readLimiter;
-    //RateLimiter *writeLimiter;
+    std::unique_ptr<IOThrottler> throttler;
 };
 static Fs fs{};
 
@@ -232,11 +217,8 @@ static int get_fs_fd(fuse_ino_t ino) {
 static void sfs_init(void *userdata, fuse_conn_info *conn) {
     (void)userdata;
 
-    if(!setup_timer()) {
-        std::cerr << "Failed to setup timer for token replenishment" << std::endl;
-    } else {
-        std::cout << "Token replenishment timer set up successfully" << std::endl;
-    }
+    fs.throttler = std::make_unique<IOThrottler>(1000000, 1000000); //1MB/s
+
     if (conn->capable & FUSE_CAP_EXPORT_SUPPORT)
         conn->want |= FUSE_CAP_EXPORT_SUPPORT;
 
@@ -992,24 +974,14 @@ static void sfs_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                      fuse_file_info *fi) {
 
     (void) ino;
-
-    auto bucket = std::make_shared<TokenBucket>(size, initialtoken);
-    
-    {
-        std::lock_guard<std::mutex> lock(active_buckets_mutex);
-        active_buckets.push_back(bucket);
-    }
-    
-    while (!bucket->enough_tokens()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-    
-    {
-        std::lock_guard<std::mutex> lock(active_buckets_mutex);
-        active_buckets.erase(std::remove(active_buckets.begin(), active_buckets.end(), bucket), active_buckets.end());
-    }
-    
-    do_read(req, size, off, fi);
+    fs.throttler->throttledRead(
+        size,
+        [req, off, fi](size_t size) {
+            ::do_read(req, size, off, fi);
+        },
+        size
+     );
+    // do_read(req, size, off, fi);
 }
 
 
@@ -1037,23 +1009,15 @@ static void sfs_write_buf(fuse_req_t req, fuse_ino_t ino, fuse_bufvec *in_buf,
     (void) ino;
     auto size {fuse_buf_size(in_buf)};
 
-    auto bucket = std::make_shared<TokenBucket>(size, initialtoken);
-    
-    {
-        std::lock_guard<std::mutex> lock(active_buckets_mutex);
-        active_buckets.push_back(bucket);
-    }
-    
-    while (!bucket->enough_tokens()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-    
-    {
-        std::lock_guard<std::mutex> lock(active_buckets_mutex);
-        active_buckets.erase(std::remove(active_buckets.begin(), active_buckets.end(), bucket), active_buckets.end());
-    }
-    
-    do_write_buf(req, size, off, in_buf, fi);
+    fs.throttler->throttledWrite(
+        size,
+        [req, off, fi, in_buf](size_t size) {
+            ::do_write_buf(req, size, off, in_buf, fi);
+        },
+        size
+     );
+
+    // do_write_buf(req, size, off, in_buf, fi);
 }
 
 
