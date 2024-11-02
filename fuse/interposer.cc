@@ -5,7 +5,10 @@
 #include "include/workload_tracing.hpp"
 #include "include/metric_collection.hpp"
 
+
+#include "include/otel.hpp"
 int main(int argc, char *argv[]) {
+	
     // Passthrough operations
     fuse_lowlevel_ops oper {};
     assign_operations(oper);

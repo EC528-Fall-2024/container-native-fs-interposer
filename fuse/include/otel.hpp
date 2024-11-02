@@ -17,6 +17,7 @@
 #include "opentelemetry/sdk/metrics/meter.h"
 #include "opentelemetry/sdk/metrics/meter_context_factory.h"
 #include "opentelemetry/sdk/metrics/meter_provider.h"
+#include "opentelemetry/sdk/metrics/export/periodic_exporting_metric_reader.h"
 #include "opentelemetry/sdk/metrics/meter_provider_factory.h"
 #include "opentelemetry/sdk/resource/semantic_conventions.h"
 #include "opentelemetry/sdk/trace/exporter.h"
@@ -30,6 +31,18 @@
 #include "opentelemetry/trace/scope.h"
 #include "opentelemetry/trace/span.h"
 #include "opentelemetry/trace/tracer_provider.h"
+#include "opentelemetry/exporters/ostream/metric_exporter_factory.h"
+#include "opentelemetry/exporters/prometheus/exporter.h"
+#include "opentelemetry/exporters/prometheus/exporter_factory.h"
+#include "opentelemetry/exporters/prometheus/exporter_options.h"
+#include "opentelemetry/exporters/prometheus/collector.h"
+#include "opentelemetry/exporters/prometheus/exporter_utils.h"
+#include "prometheus/exposer.h"
+#include "opentelemetry/sdk/metrics/aggregation/default_aggregation.h"
+#include "opentelemetry/sdk/metrics/aggregation/histogram_aggregation.h"
+#include "opentelemetry/sdk/metrics/view/instrument_selector_factory.h"
+#include "opentelemetry/sdk/metrics/view/meter_selector_factory.h"
+#include "opentelemetry/sdk/metrics/view/view_factory.h"
 
 namespace ot 		     = opentelemetry;
 namespace common		 = ot::common;
@@ -41,6 +54,7 @@ namespace nostd          = ot::nostd;
 namespace resource       = ot::sdk::resource;
 namespace metric_api	 = ot::metrics;
 namespace metric_sdk	 = ot::sdk::metrics;
+namespace metric_exp     = ot::exporter::metrics;
 
 std::string otlpEndpoint();
 
@@ -52,6 +66,7 @@ nostd::shared_ptr<trace_api::Span> getSpan(std::string libName, std::string span
 // Metrics helper functions
 void initMetrics();
 void cleanupMetrics();
+nostd::unique_ptr<metric_api::Counter<uint64_t>> getReadCounter();
 
 
 #endif // OTEL_HPP_INCLUDED

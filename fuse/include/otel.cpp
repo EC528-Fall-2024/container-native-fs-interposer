@@ -41,30 +41,66 @@ nostd::shared_ptr<trace_api::Span> getSpan(std::string libName, std::string span
     return tracer->StartSpan(spanName);
 }
 
+// Metrics with OTEL
+std::shared_ptr<metric_api::MeterProvider> provider;
+std::unique_ptr<metric_api::MeterProvider> prometheusProvider;
+const std::string name = "fuse_otel_";
+
 void initMetrics() {
+
+	const std::string version = "1.2.0";
+	const std::string schema = "https://opentelemetry.io/schemas/1.2.0";
+	const std::string address = "localhost:8080";
+
+	/*// OTLP GRPC exporter
 	otlp::OtlpGrpcMetricExporterOptions options;
 	options.endpoint = "localhost:4318"; // fix later
 
 	auto exporter = otlp::OtlpGrpcMetricExporterFactory::Create(options);
+	*/
+
+
+	// Prometheus Exporter
+	metric_exp::PrometheusExporterOptions promOpts;
+	promOpts.url = address;
+	auto exporter = metric_exp::PrometheusExporterFactory::Create(promOpts);
 
 	// Initialize and set the global MeterProvider
-	metric_sdk::PeriodicExportingMetricReaderOptions reader_options;
-	reader_options.export_interval_millis = std::chrono::milliseconds(1000);
-	reader_options.export_timeout_millis  = std::chrono::milliseconds(500);
+	prometheusProvider = metric_sdk::MeterProviderFactory::Create();
+	auto *p = static_cast<metric_sdk::MeterProvider *>(prometheusProvider.get());
+	p->AddMetricReader(std::move(exporter));
+	
+	// Add read counter view
+	std::string readCounterName = name + "read_counter";
+	std::string readCounterUnits = "bytes";
+	auto instrumentSelector = metric_sdk::InstrumentSelectorFactory::Create(
+		metric_sdk::InstrumentType::kCounter, 
+		readCounterName,
+		readCounterUnits);
+	auto meterSelector = metric_sdk::MeterSelectorFactory::Create(
+		name, 
+		version, 
+		schema);
+	auto sumView = metric_sdk::ViewFactory::Create(
+		readCounterName, 
+		"description", 
+		readCounterUnits, 
+		metric_sdk::AggregationType::kSum);
+	p->AddView(std::move(instrumentSelector), std::move(meterSelector), std::move(sumView));
 
-	auto reader =
-		metric_sdk::PeriodicExportingMetricReaderFactory::Create(std::move(exporter), reader_options);
-
-	auto context = metric_sdk::MeterContextFactory::Create();
-	context->AddMetricReader(std::move(reader));
-
-	auto u_provider = metric_sdk::MeterProviderFactory::Create(std::move(context));
-	std::shared_ptr<opentelemetry::metrics::MeterProvider> provider(std::move(u_provider));
-
+	provider = std::move(prometheusProvider);
 	metric_api::Provider::SetMeterProvider(provider);
 }
 
 void cleanupMetrics() {
 	std::shared_ptr<metric_api::MeterProvider> none;
 	metric_api::Provider::SetMeterProvider(none);
+}
+
+nostd::unique_ptr<metric_api::Counter<uint64_t>> getReadCounter() {
+	std::string readCounterName = name + "read_counter";
+	auto provider = metric_api::Provider::GetMeterProvider();
+	nostd::shared_ptr<metric_api::Meter> meter = provider->GetMeter(name, "1.2.0");
+	auto counter = meter->CreateUInt64Counter(readCounterName);
+	return counter;
 }

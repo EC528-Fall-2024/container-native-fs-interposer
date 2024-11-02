@@ -8,8 +8,20 @@ thread = dependency('threads')
 proto_dep = dependency('protobuf')
 grpc_dep = dependency('grpc++')
 
+# Prometheus dependency
+prom_dep = dependency(
+  'prometheus-cpp',
+  modules: [
+    'prometheus-cpp::core',
+    'prometheus-cpp::util', 
+    'prometheus-cpp::civetweb',
+    'prometheus-cpp::pull',
+    'prometheus-cpp::push'
+  ]
+)
+
 # Get OpenTelemetry dependency
-ot_path = '/home/julia/source/install/lib'
+
 ot_dep = dependency(
   'opentelemetry-cpp',
   modules: [
@@ -25,9 +37,13 @@ ot_dep = dependency(
     'opentelemetry-cpp::otlp_grpc_exporter',
     'opentelemetry-cpp::otlp_grpc_client',
     'opentelemetry-cpp::otlp_recordable',
-    'opentelemetry-cpp::otlp_grpc_metrics_exporter'
-  ]
+    'opentelemetry-cpp::otlp_grpc_metrics_exporter',
+    'opentelemetry-cpp::prometheus_exporter'
+    ]
 )
+
+
+
 
 # Create executables
 
@@ -38,6 +54,6 @@ executable(
   'include/otel.cpp',
   'include/workload_tracing.cpp',
   'include/metric_collection.cpp',
-  dependencies: [thread, fuse, ot_dep, proto_dep, grpc_dep],
+  dependencies: [thread, fuse, ot_dep, proto_dep, grpc_dep, prom_dep],
   install: true
 )
