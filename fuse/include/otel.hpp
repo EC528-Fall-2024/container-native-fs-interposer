@@ -55,6 +55,8 @@ namespace resource       = ot::sdk::resource;
 namespace metric_api	 = ot::metrics;
 namespace metric_sdk	 = ot::sdk::metrics;
 namespace metric_exp     = ot::exporter::metrics;
+namespace context 	 = ot::context;
+
 
 std::string otlpEndpoint();
 
@@ -66,7 +68,7 @@ nostd::shared_ptr<trace_api::Span> getSpan(std::string libName, std::string span
 // Metrics helper functions
 void initMetrics();
 void cleanupMetrics();
-nostd::unique_ptr<metric_api::Counter<uint64_t>> getReadCounter();
-
+nostd::unique_ptr<metric_api::Counter<uint64_t>> getCounter(std::string counterName);
+nostd::unique_ptr<metric_api::Histogram<double>> getHistogram(std::string histName, std::string description, std::string unit); 
 
 #endif // OTEL_HPP_INCLUDED

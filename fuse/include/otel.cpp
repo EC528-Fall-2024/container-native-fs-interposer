@@ -43,15 +43,12 @@ nostd::shared_ptr<trace_api::Span> getSpan(std::string libName, std::string span
 
 // Metrics with OTEL
 std::shared_ptr<metric_api::MeterProvider> provider;
-std::unique_ptr<metric_api::MeterProvider> prometheusProvider;
 const std::string name = "fuse_otel_";
+const std::string version = "1.2.0";
+const std::string schema = "https://opentelemetry.io/schemas/1.2.0";
+const std::string address = "localhost:8080";
 
 void initMetrics() {
-
-	const std::string version = "1.2.0";
-	const std::string schema = "https://opentelemetry.io/schemas/1.2.0";
-	const std::string address = "localhost:8080";
-
 	/*// OTLP GRPC exporter
 	otlp::OtlpGrpcMetricExporterOptions options;
 	options.endpoint = "localhost:4318"; // fix later
@@ -59,35 +56,16 @@ void initMetrics() {
 	auto exporter = otlp::OtlpGrpcMetricExporterFactory::Create(options);
 	*/
 
-
 	// Prometheus Exporter
 	metric_exp::PrometheusExporterOptions promOpts;
 	promOpts.url = address;
 	auto exporter = metric_exp::PrometheusExporterFactory::Create(promOpts);
 
 	// Initialize and set the global MeterProvider
-	prometheusProvider = metric_sdk::MeterProviderFactory::Create();
+	auto prometheusProvider = metric_sdk::MeterProviderFactory::Create();
 	auto *p = static_cast<metric_sdk::MeterProvider *>(prometheusProvider.get());
 	p->AddMetricReader(std::move(exporter));
 	
-	// Add read counter view
-	std::string readCounterName = name + "read_counter";
-	std::string readCounterUnits = "bytes";
-	auto instrumentSelector = metric_sdk::InstrumentSelectorFactory::Create(
-		metric_sdk::InstrumentType::kCounter, 
-		readCounterName,
-		readCounterUnits);
-	auto meterSelector = metric_sdk::MeterSelectorFactory::Create(
-		name, 
-		version, 
-		schema);
-	auto sumView = metric_sdk::ViewFactory::Create(
-		readCounterName, 
-		"description", 
-		readCounterUnits, 
-		metric_sdk::AggregationType::kSum);
-	p->AddView(std::move(instrumentSelector), std::move(meterSelector), std::move(sumView));
-
 	provider = std::move(prometheusProvider);
 	metric_api::Provider::SetMeterProvider(provider);
 }
@@ -97,10 +75,20 @@ void cleanupMetrics() {
 	metric_api::Provider::SetMeterProvider(none);
 }
 
-nostd::unique_ptr<metric_api::Counter<uint64_t>> getReadCounter() {
-	std::string readCounterName = name + "read_counter";
-	auto provider = metric_api::Provider::GetMeterProvider();
-	nostd::shared_ptr<metric_api::Meter> meter = provider->GetMeter(name, "1.2.0");
-	auto counter = meter->CreateUInt64Counter(readCounterName);
+nostd::unique_ptr<metric_api::Counter<uint64_t>> getCounter(std::string counterName) {
+	auto meterProvider = metric_api::Provider::GetMeterProvider();
+	nostd::shared_ptr<metric_api::Meter> meter = meterProvider->GetMeter(name, version);
+	auto counter = meter->CreateUInt64Counter(name + counterName);
 	return counter;
 }
+
+nostd::unique_ptr<metric_api::Histogram<double>> getHistogram(std::string histName, std::string description, std::string unit) {
+	auto meterProvider = metric_api::Provider::GetMeterProvider();
+	nostd::shared_ptr<metric_api::Meter> meter = meterProvider->GetMeter(name, version);
+	auto hist = meter->CreateDoubleHistogram(
+		name + histName, 
+		description, 
+		unit);
+	return hist;
+}
+
