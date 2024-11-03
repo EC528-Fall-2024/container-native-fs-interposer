@@ -82,7 +82,11 @@ nostd::unique_ptr<metric_api::Counter<uint64_t>> getCounter(std::string counterN
 	return counter;
 }
 
-nostd::unique_ptr<metric_api::Histogram<double>> getHistogram(std::string histName, std::string description, std::string unit) {
+nostd::unique_ptr<metric_api::Histogram<double>> getHistogram(
+	std::string histName, 
+	std::string description, 
+	std::string unit) {
+	
 	auto meterProvider = metric_api::Provider::GetMeterProvider();
 	nostd::shared_ptr<metric_api::Meter> meter = meterProvider->GetMeter(name, version);
 	auto hist = meter->CreateDoubleHistogram(
@@ -90,5 +94,15 @@ nostd::unique_ptr<metric_api::Histogram<double>> getHistogram(std::string histNa
 		description, 
 		unit);
 	return hist;
+}
+
+nostd::unique_ptr<metric_api::UpDownCounter<int64_t>> getUpDownCounter(std::string counterName, std::string description, std::string unit) {
+	auto meterProvider = metric_api::Provider::GetMeterProvider();
+	nostd::shared_ptr<metric_api::Meter> meter = meterProvider->GetMeter(name, version);
+	auto counter = meter->CreateInt64UpDownCounter(
+		name + counterName,
+		description,
+		unit);
+	return counter;
 }
 

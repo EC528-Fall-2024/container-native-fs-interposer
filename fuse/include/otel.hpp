@@ -70,5 +70,6 @@ void initMetrics();
 void cleanupMetrics();
 nostd::unique_ptr<metric_api::Counter<uint64_t>> getCounter(std::string counterName);
 nostd::unique_ptr<metric_api::Histogram<double>> getHistogram(std::string histName, std::string description, std::string unit); 
+nostd::unique_ptr<metric_api::UpDownCounter<int64_t>> getUpDownCounter(std::string counterName, std::string description, std::string unit);
 
 #endif // OTEL_HPP_INCLUDED
