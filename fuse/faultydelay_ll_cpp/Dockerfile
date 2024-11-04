@@ -31,6 +31,14 @@ COPY . /usr/src/myapp
 # Change working directory
 WORKDIR /usr/src/myapp
 
+#Otel install lines
+#git clone --recurse-submodules https://github.com/open-telemetry/opentelemetry-cpp
+#cd opentelemetry-cpp
+#mkdir build && cd build && cmake ..
+#cmake --build . --target all
+#ctest
+#cmake --install . --prefix /<install-root>/ (optional)
+
 #Verify tarball w signify
 RUN signify-openbsd -V -m libfuse/fuse-3.16.2.tar.gz -p libfuse/fuse-3.16.pub
 

@@ -28,6 +28,14 @@
   See the file COPYING.
 */
 
+/* Openttelemetry in another cmake possibly?
+# CMakeLists.txt
+find_package(opentelemetry-cpp CONFIG REQUIRED)
+...
+target_include_directories(foo PRIVATE ${OPENTELEMETRY_CPP_INCLUDE_DIRS})
+target_link_libraries(foo PRIVATE ${OPENTELEMETRY_CPP_LIBRARIES}
+*/
+
 /** @file
  *
  * This file system mirrors the existing file system hierarchy of the
