@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 RUN apt-get update && apt-get install -y \
-    libudev-dev libevdev-dev libsystemd-dev libglib2.0-dev libjson-glib-dev libunistring-dev check valgrind swig\
+    libudev-dev libevdev-dev libsystemd-dev libglib2.0-dev libjson-glib-dev libunistring-dev check valgrind swig libgtest-dev libbenchmark-dev protobuf-compiler libprotobuf-dev autoconf libtool\
     && rm -rf /var/lib/apt/lists/*
 
 RUN apt-get update && apt-get install -y \
@@ -31,10 +31,33 @@ COPY . /usr/src/myapp
 # Change working directory
 WORKDIR /usr/src/myapp
 
+#Gtest install (currently building otel without gtest cause of other bugs, so potentially dont need)
+RUN cd /usr/src/gtest \
+    && cmake -DBUILD_GMOCK=ON . \
+    && make \
+    && cp lib/*.a /usr/local/lib
+
+#build grpc
+RUN cd grpc \
+    && git submodule update --init --recursive \
+    && mkdir -p cmake/build \
+    && cd cmake/build \
+    && cmake ../.. \
+    && make -j4 \
+    && make install
+
 #Otel install lines
+RUN cd opentelemetry-cpp \
+    && mkdir build \
+    && cd build \
+    && cmake -DWITH_OTLP_GRPC=ON -DWITH_LOGS_PREVIEW=ON -DOPENTELEMETRY_INSTALL=ON -DGMOCK_LIB=/usr/local/lib/libgmock.a -DGMOCK_MAIN_LIB=/usr/local/lib/libgmock_main.a -DBUILD_TESTING=OFF .. \
+    && cmake --build . \
+    && make install
+
 #git clone --recurse-submodules https://github.com/open-telemetry/opentelemetry-cpp
 #cd opentelemetry-cpp
 #mkdir build && cd build && cmake ..
+#cmake -DWITH_LOGS_PREVIEW=ON -DWITH_OTLP=ON -DGMOCK_LIB=/usr/local/lib/libgmock.a -DGMOCK_MAIN_LIB=/usr/local/lib/libgmock_main.a -DGTEST_LIBRARIES="/usr/lib/aarch64-linux-gnu/libgtest.a;/usr/lib/aarch64-linux-gnu/libgtest_main.a" ..
 #cmake --build . --target all
 #ctest
 #cmake --install . --prefix /<install-root>/ (optional)

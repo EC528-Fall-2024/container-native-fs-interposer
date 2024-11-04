@@ -1,3 +1,6 @@
 [submodule "fuse/faultydelay_ll_cpp/opentelemetry-cpp"]
 	path = fuse/faultydelay_ll_cpp/opentelemetry-cpp
 	url = https://github.com/open-telemetry/opentelemetry-cpp
+[submodule "fuse/faultydelay_ll_cpp/grpc"]
+	path = fuse/faultydelay_ll_cpp/grpc
+	url = https://github.com/grpc/grpc

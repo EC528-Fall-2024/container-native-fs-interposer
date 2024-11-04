@@ -12,6 +12,7 @@
 	docker create --privileged -v /dev/fuse:/dev/fuse --name fuse-container my-fuse-app
 	docker start fuse-container
 	docker exec -it fuse-container sh
+	docker stop fuse-container && docker rm fuse-container
 	//then mount to mountpoint and cd until testmount to test IO, errors logged on local text file in mountpoint/
 
 	//Kube commands
@@ -88,12 +89,12 @@ target_link_libraries(foo PRIVATE ${OPENTELEMETRY_CPP_LIBRARIES}
 
 #include "libfuse/passthrough_helpers.h"
 
-// #include <opentelemetry/sdk/logs/simple_log_processor.h>
-// #include <opentelemetry/sdk/logs/log_record.h>
-// #include <opentelemetry/sdk/logs/logger_provider.h>
-// #include <opentelemetry/exporters/otlp/otlp_grpc_log_exporter.h>
-// #include <opentelemetry/logs/provider.h>
-// #include <opentelemetry/logs/logger.h>
+//#include <opentelemetry/sdk/logs/simple_log_processor.h>
+//#include <opentelemetry/sdk/logs/log_record.h>
+#include <opentelemetry/sdk/logs/logger_provider.h>
+//#include <opentelemetry/exporters/otlp/otlp_grpc_log_exporter.h>
+#include <opentelemetry/logs/provider.h>
+#include <opentelemetry/logs/logger.h>
 #include <chrono>
 #include <iomanip>
 #include <ctime>
