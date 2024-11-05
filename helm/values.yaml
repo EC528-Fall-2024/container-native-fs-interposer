@@ -1,1 +1,5 @@
 driverName: interposer.csi.example.com
+image:
+  repository: ghcr.io/ec528-fall-2024/container-native-fs-interposer/csi-plugin
+  tag: ""
+  pullPolicy: IfNotPresent

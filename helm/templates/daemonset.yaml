@@ -36,8 +36,8 @@ spec:
             name: registration-dir
 
         - name: interposer
-          image: docker.io/library/csi-node:latest
-          imagePullPolicy: "IfNotPresent"
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
           env:
             - name: CSI_ENDPOINT

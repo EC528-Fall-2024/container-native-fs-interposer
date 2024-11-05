@@ -51,7 +51,9 @@ jobs:
             csi-interposer ./helm \
             --namespace csi-interposer \
             --create-namespace \
-            --atomic
+            --atomic \
+            --set image.repository=docker.io/library/csi-node \
+            --set image.tag=latest
 
           kubectl -n csi-interposer wait jaegers.jaegertracing.io jaeger-default --for=jsonpath='{.status.phase}'=Running
       - name: Apply CSI example manifests
