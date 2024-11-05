@@ -40,6 +40,8 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
           env:
+            - name: CSI_NAME
+              value: {{ .Values.driverName }}
             - name: CSI_ENDPOINT
               value: /csi/csi.sock
             - name: KUBE_NODE_NAME

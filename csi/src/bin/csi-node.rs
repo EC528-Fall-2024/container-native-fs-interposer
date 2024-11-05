@@ -16,7 +16,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         result => result?,
     }
     Server::builder()
-        .add_service(IdentityServer::new(IdentityService {}))
+        .add_service(IdentityServer::new(IdentityService::new(&env::var(
+            "CSI_NAME",
+        )?)))
         .add_service(NodeServer::new(
             NodeService::new(&env::var("KUBE_NODE_NAME")?).await,
         ))

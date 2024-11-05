@@ -3,7 +3,17 @@ use crate::csi::v1::*;
 use std::collections::HashMap;
 use tonic::{Request, Response, Status};
 
-pub struct IdentityService {}
+pub struct IdentityService {
+    name: String,
+}
+
+impl IdentityService {
+    pub fn new(name: &str) -> Self {
+        return Self {
+            name: name.to_string(),
+        };
+    }
+}
 
 #[tonic::async_trait]
 impl Identity for IdentityService {
@@ -15,8 +25,7 @@ impl Identity for IdentityService {
         _: Request<GetPluginInfoRequest>,
     ) -> Result<Response<GetPluginInfoResponse>, Status> {
         Ok(Response::new(GetPluginInfoResponse {
-            // TODO: better CSI plugin name
-            name: "interposer.csi.example.com".to_string(),
+            name: self.name.clone(),
             vendor_version: env!("CARGO_PKG_VERSION").to_string(),
             manifest: HashMap::new(),
         }))
