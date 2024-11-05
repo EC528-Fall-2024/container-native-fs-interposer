@@ -20,15 +20,17 @@ pub struct NodeService {
     client: Client,
     node_id: String,
     image: String,
+    otlp_endpoint: String,
 }
 
 impl NodeService {
-    pub async fn new(node_id: &str, image: &str) -> Self {
+    pub async fn new(node_id: &str, image: &str, otlp_endpoint: &str) -> Self {
         let client = Client::try_default().await.unwrap();
         Self {
             client,
             node_id: node_id.to_string(),
             image: image.to_string(),
+            otlp_endpoint: otlp_endpoint.to_string(),
         }
     }
     pub fn new_interposer(
@@ -53,14 +55,6 @@ impl NodeService {
         let command = shlex::split(command).ok_or(Status::invalid_argument(
             "unable to split command in volumeAttributes",
         ))?;
-
-        let otlp_endpoint =
-            request
-                .volume_context
-                .get("otlpEndpoint")
-                .ok_or(Status::invalid_argument(
-                    "missing otlpEndpoint in volumeAttributes",
-                ))?;
 
         let source_path = "/lowerdir";
 
@@ -96,7 +90,7 @@ impl NodeService {
                         },
                         EnvVar {
                             name: "OTLP_ENDPOINT".to_string(),
-                            value: Some(otlp_endpoint.to_string()),
+                            value: Some(self.otlp_endpoint.to_string()),
                             ..Default::default()
                         },
                     ]),

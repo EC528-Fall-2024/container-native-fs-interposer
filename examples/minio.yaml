@@ -54,4 +54,3 @@ spec:
             volumeAttributes:
               persistentVolumeClaimName: minio-pvc
               command: interposer --foreground $(SOURCE_PATH) $(TARGET_PATH)
-              otlpEndpoint: jaeger-default-collector-headless.csi-interposer:4317

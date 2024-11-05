@@ -46,6 +46,8 @@ spec:
               value: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
             - name: CSI_ENDPOINT
               value: /csi/csi.sock
+            - name: OTLP_ENDPOINT
+              value: "jaeger-default-collector-headless.{{ .Release.Namespace }}:4317"
             - name: KUBE_NODE_NAME
               valueFrom:
                 fieldRef:
