@@ -1,0 +1,21 @@
+name: Release Container Images and Helm Charts
+
+on:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  packages: write
+
+jobs:
+  release-helm-chart:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Release Helm Chart
+        run: |
+          helm registry login -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }} ghcr.io
+          helm package --app-version ${{ github.ref_name }} --version ${{ github.ref_name }} helm
+          helm push container-native-fs-interposer-${{ github.ref_name }}.tgz \
+            $(echo oci://ghcr.io/${{ github.repository_owner }}/helm-charts | tr '[:upper:]' '[:lower:]')
