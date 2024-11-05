@@ -38,6 +38,13 @@ jobs:
             --atomic \
             --version v2.57.0 \
             --set rbac.clusterRole=true
+
+          helm install \
+            grafana-operator oci://ghcr.io/grafana/helm-charts/grafana-operator \
+            --namespace grafana-operator \
+            --create-namespace \
+            --atomic \
+            --version v5.15.1
       - name: Apply CSI plugin manifests
         run: |
           helm install \
