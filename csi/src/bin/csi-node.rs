@@ -20,7 +20,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "CSI_NAME",
         )?)))
         .add_service(NodeServer::new(
-            NodeService::new(&env::var("KUBE_NODE_NAME")?).await,
+            NodeService::new(&env::var("KUBE_NODE_NAME")?, &env::var("CSI_IMAGE")?).await,
         ))
         .serve_with_incoming(UnixListenerStream::new(UnixListener::bind(&path)?))
         .await?;

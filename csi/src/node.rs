@@ -19,14 +19,16 @@ use tonic::{Request, Response, Status};
 pub struct NodeService {
     client: Client,
     node_id: String,
+    image: String,
 }
 
 impl NodeService {
-    pub async fn new(node_id: &str) -> Self {
+    pub async fn new(node_id: &str, image: &str) -> Self {
         let client = Client::try_default().await.unwrap();
         Self {
             client,
             node_id: node_id.to_string(),
+            image: image.to_string(),
         }
     }
     pub fn new_interposer(
@@ -98,7 +100,7 @@ impl NodeService {
                             ..Default::default()
                         },
                     ]),
-                    image: Some("docker.io/library/csi-node:latest".to_string()),
+                    image: Some(self.image.clone()),
                     image_pull_policy: Some("IfNotPresent".to_string()),
                     name: "interposer".to_string(),
                     security_context: Some(SecurityContext {
