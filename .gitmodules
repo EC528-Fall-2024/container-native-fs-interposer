@@ -4,3 +4,6 @@
 [submodule "fuse/faultydelay_ll_cpp/grpc"]
 	path = fuse/faultydelay_ll_cpp/grpc
 	url = https://github.com/grpc/grpc
+[submodule "fuse/faultydelay_ll_cpp/abseil-cpp"]
+	path = fuse/faultydelay_ll_cpp/abseil-cpp
+	url = https://github.com/abseil/abseil-cpp.git

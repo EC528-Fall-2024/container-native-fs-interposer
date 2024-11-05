@@ -187,6 +187,55 @@ static void passthrough_ll_help(void)
 "    -o cache=always        Cache always\n" << std::endl;
 }
 
+//More OTEL init functions:
+/*
+namespace trace_api = opentelemetry::trace;
+namespace trace_sdk = opentelemetry::sdk::trace;
+namespace otlp = opentelemetry::exporter::otlp;
+
+namespace logs_api = opentelemetry::logs;
+namespace logs_sdk = opentelemetry::sdk::logs;
+
+void InitTracer(){
+  trace_sdk::BatchSpanProcessorOptions bspOpts{};
+  opentelemetry::exporter::otlp::OtlpGrpcExporterOptions opts;
+  opts.endpoint = "localhost:4317"; //need jaeger endpoint
+  opts.use_ssl_credentials = true;
+  opts.ssl_credentials_cacert_as_string = "ssl-certificate";
+  auto exporter  = otlp::OtlpGrpcExporterFactory::Create(opts);
+  auto processor = trace_sdk::BatchSpanProcessorFactory::Create(std::move(exporter), bspOpts);
+  std::shared_ptr<opentelemetry::trace_api::TracerProvider> provider =
+      trace_sdk::TracerProviderFactory::Create(std::move(processor));
+  // Set the global trace provider
+  trace_api::Provider::SetTracerProvider(provider);
+}
+
+void InitLogger(){
+  otlp::OtlpGrpcLogRecordExporterOptions opts;
+  opts.endpoint = "localhost:4317"; //also jaeger endpoint
+  opts.use_ssl_credentials = true;
+  opts.ssl_credentials_cacert_as_string = "ssl-certificate";
+  auto exporter  = otlp::OtlpGrpcLogRecordExporterFactory::Create(opts);
+  auto processor = logs_sdk::SimpleLogRecordProcessorFactory::Create(std::move(exporter));
+  nostd::shared_ptr<logs_api::LoggerProvider> provider(
+      logs_sdk::LoggerProviderFactory::Create(std::move(processor)));
+  logs_api::Provider::SetLoggerProvider(provider);
+}
+
+void logFault(const std::string& faultType) {
+    // Start tracing
+    auto tracer = opentelemetry::trace::Provider::GetTracer("my_file_system_tracer");
+    auto span = tracer->StartSpan("simulateFault");
+
+    // Log fault
+    auto logger = opentelemetry::logs::Provider::GetLogger("my_file_system_logger");
+    logger->Log("Fault simulated", {{"fault_type", faultType}, {"timestamp", getCurrentTimestamp()}});
+
+    // End tracing
+    span->End();
+}
+*/
+
 //Helper functions for logging errors:
 /*
 //Otel init

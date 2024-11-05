@@ -39,10 +39,17 @@ RUN cd /usr/src/gtest \
 
 #build grpc
 RUN cd grpc \
-    && git submodule update --init --recursive \
     && mkdir -p cmake/build \
     && cd cmake/build \
     && cmake ../.. \
+    && make -j4 \
+    && make install
+
+#build abseil dependency for grpc
+RUN cd abseil-cpp \
+    && mkdir build \
+    && cd build \
+    && cmake .. -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
     && make -j4 \
     && make install
 
@@ -50,14 +57,14 @@ RUN cd grpc \
 RUN cd opentelemetry-cpp \
     && mkdir build \
     && cd build \
-    && cmake -DWITH_OTLP_GRPC=ON -DWITH_LOGS_PREVIEW=ON -DOPENTELEMETRY_INSTALL=ON -DGMOCK_LIB=/usr/local/lib/libgmock.a -DGMOCK_MAIN_LIB=/usr/local/lib/libgmock_main.a -DBUILD_TESTING=OFF .. \
+    && cmake -DOPENTELEMETRY_INSTALL=ON -DBUILD_TESTING=OFF .. \
     && cmake --build . \
     && make install
 
 #git clone --recurse-submodules https://github.com/open-telemetry/opentelemetry-cpp
 #cd opentelemetry-cpp
 #mkdir build && cd build && cmake ..
-#cmake -DWITH_LOGS_PREVIEW=ON -DWITH_OTLP=ON -DGMOCK_LIB=/usr/local/lib/libgmock.a -DGMOCK_MAIN_LIB=/usr/local/lib/libgmock_main.a -DGTEST_LIBRARIES="/usr/lib/aarch64-linux-gnu/libgtest.a;/usr/lib/aarch64-linux-gnu/libgtest_main.a" ..
+#cmake -DWITH_OTLP_GRPC=ON -DWITH_LOGS_PREVIEW=ON -DOPENTELEMETRY_INSTALL=ON -DGMOCK_LIB=/usr/local/lib/libgmock.a -DGMOCK_MAIN_LIB=/usr/local/lib/libgmock_main.a -DBUILD_TESTING=OFF .. \
 #cmake --build . --target all
 #ctest
 #cmake --install . --prefix /<install-root>/ (optional)
