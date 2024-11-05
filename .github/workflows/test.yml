@@ -34,7 +34,8 @@ jobs:
             jaeger jaegertracing/jaeger-operator \
             --namespace jaeger \
             --create-namespace \
-            --version v2.57.0
+            --version v2.57.0 \
+            --set rbac.clusterRole=true
 
           kubectl -n jaeger wait deployments.apps/jaeger-jaeger-operator --for=condition=available
       - name: Apply CSI plugin manifests
