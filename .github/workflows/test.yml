@@ -26,6 +26,7 @@ jobs:
             cert-manager jetstack/cert-manager \
             --namespace cert-manager \
             --create-namespace \
+            --atomic \
             --version v1.16.1 \
             --set crds.enabled=true
 
@@ -34,14 +35,18 @@ jobs:
             jaeger jaegertracing/jaeger-operator \
             --namespace jaeger \
             --create-namespace \
-            --version v2.57.0
-
-          kubectl -n jaeger wait deployments.apps/jaeger-jaeger-operator --for=condition=available
+            --atomic \
+            --version v2.57.0 \
+            --set rbac.clusterRole=true
       - name: Apply CSI plugin manifests
         run: |
-          kubectl apply -k deploy
-          kubectl -n csi-interposer rollout status daemonset csi-interposer
-          kubectl wait jaegers.jaegertracing.io jaeger-default --for=jsonpath='{.status.phase}'=Running
+          helm install \
+            csi-interposer ./helm \
+            --namespace csi-interposer \
+            --create-namespace \
+            --atomic
+
+          kubectl -n csi-interposer wait jaegers.jaegertracing.io jaeger-default --for=jsonpath='{.status.phase}'=Running
       - name: Apply CSI example manifests
         run: |
           kubectl apply -k examples

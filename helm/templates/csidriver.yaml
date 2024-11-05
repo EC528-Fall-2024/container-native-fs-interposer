@@ -1,8 +1,10 @@
-# Reference: https://kubernetes.io/docs/reference/kubernetes-api/config-and-storage-resources/csi-driver-v1/
 apiVersion: storage.k8s.io/v1
 kind: CSIDriver
 metadata:
-  name: interposer.csi.example.com
+  name: {{ .Values.driverName }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
 spec:
   attachRequired: false
   fsGroupPolicy: None
