@@ -19,22 +19,14 @@ jobs:
       - name: Load CSI plugin image into kind
         run: |
           kind load image-archive <(./result)
-      - uses: helmfile/helmfile-action@v1.0.0
+      - uses: helmfile/helmfile-action@main
         with:
           helmfile-args: apply --skip-diff-on-install
-      - name: Apply CSI plugin manifests
-        run: |
-          helm install \
-            csi-interposer ./helm \
-            --namespace csi-interposer \
-            --create-namespace \
-            --atomic \
-            --set image.repository=docker.io/library/csi-node \
-            --set image.tag=latest
-
-          kubectl -n csi-interposer wait jaegers.jaegertracing.io jaeger-default --for=jsonpath='{.status.phase}'=Running
       - name: Apply CSI example manifests
         run: |
+          kubectl -n csi-interposer rollout status daemonset csi-interposer
+          kubectl -n csi-interposer wait jaegers.jaegertracing.io jaeger-default \
+            --for=jsonpath='{.status.phase}'=Running
           kubectl apply -k examples
       - name: Wait for test job to complete
         run: |

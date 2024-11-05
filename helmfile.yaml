@@ -3,6 +3,9 @@ repositories:
     url: https://charts.jetstack.io
   - name: jaegertracing
     url: https://jaegertracing.github.io/helm-charts
+helmDefaults:
+  wait: true
+  waitForJobs: true
 releases:
   - name: cert-manager
     namespace: cert-manager
@@ -11,7 +14,6 @@ releases:
     values:
       - crds:
           enabled: true
-    atomic: true
   - name: jaeger
     namespace: jaeger
     chart: jaegertracing/jaeger-operator
@@ -19,12 +21,21 @@ releases:
     values:
       - rbac:
           clusterRole: true
-    atomic: true
-    disableValidation: true
+    disableValidationOnInstall: true
     needs:
       - cert-manager/cert-manager
   - name: grafana-operator
     namespace: grafana-operator
     chart: oci://ghcr.io/grafana/helm-charts/grafana-operator
     version: v5.15.1
-    atomic: true
+  - name: csi-interposer
+    namespace: csi-interposer
+    chart: ./helm
+    values:
+      - image:
+          repository: docker.io/library/csi-node
+          tag: latest
+    disableValidationOnInstall: true
+    needs:
+      - jaeger/jaeger
+      - grafana-operator/grafana-operator
