@@ -21,12 +21,13 @@ jobs:
           kind load image-archive <(./result)
       - name: Install jaeger operator
         run: |
-          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.16.1/cert-manager.yaml
-          kubectl wait customresourcedefinitions.apiextensions.k8s.io \
-            certificates.cert-manager.io --for=condition=established
-          kubectl wait customresourcedefinitions.apiextensions.k8s.io \
-            issuers.cert-manager.io --for=condition=established
-          kubectl -n cert-manager wait deployments.apps/cert-manager-webhook --for=condition=available
+          helm repo add jetstack https://charts.jetstack.io --force-update
+          helm install \
+            cert-manager jetstack/cert-manager \
+            --namespace cert-manager \
+            --create-namespace \
+            --version v1.16.1 \
+            --set crds.enabled=true
 
           kubectl create namespace observability
           kubectl apply -f https://github.com/jaegertracing/jaeger-operator/releases/download/v1.62.0/jaeger-operator.yaml
