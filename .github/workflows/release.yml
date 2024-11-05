@@ -9,6 +9,27 @@ permissions:
   packages: write
 
 jobs:
+  release-container-image:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Release Container Image
+        run: |
+          IMAGE=$(echo ghcr.io/${{ github.repository }}/csi-plugin:${{ github.ref_name }} | tr '[:upper:]' '[:lower:]')
+
+          nix build .#csi-node -vL
+          ./result | docker image load
+
+          docker tag csi-node:latest "$IMAGE"
+          docker push "$IMAGE"
+
   release-helm-chart:
     runs-on: ubuntu-24.04
     steps:
