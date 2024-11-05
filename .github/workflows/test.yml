@@ -19,32 +19,9 @@ jobs:
       - name: Load CSI plugin image into kind
         run: |
           kind load image-archive <(./result)
-      - name: Install jaeger operator
-        run: |
-          helm repo add jetstack https://charts.jetstack.io --force-update
-          helm install \
-            cert-manager jetstack/cert-manager \
-            --namespace cert-manager \
-            --create-namespace \
-            --atomic \
-            --version v1.16.1 \
-            --set crds.enabled=true
-
-          helm repo add jaegertracing https://jaegertracing.github.io/helm-charts --force-update
-          helm install \
-            jaeger jaegertracing/jaeger-operator \
-            --namespace jaeger \
-            --create-namespace \
-            --atomic \
-            --version v2.57.0 \
-            --set rbac.clusterRole=true
-
-          helm install \
-            grafana-operator oci://ghcr.io/grafana/helm-charts/grafana-operator \
-            --namespace grafana-operator \
-            --create-namespace \
-            --atomic \
-            --version v5.15.1
+      - uses: helmfile/helmfile-action@v1.0.0
+        with:
+          helmfile-args: apply --skip-diff-on-install
       - name: Apply CSI plugin manifests
         run: |
           helm install \

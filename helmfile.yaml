@@ -1,0 +1,30 @@
+repositories:
+  - name: jetstack
+    url: https://charts.jetstack.io
+  - name: jaegertracing
+    url: https://jaegertracing.github.io/helm-charts
+releases:
+  - name: cert-manager
+    namespace: cert-manager
+    chart: jetstack/cert-manager
+    version: 1.16.1
+    values:
+      - crds:
+          enabled: true
+    atomic: true
+  - name: jaeger
+    namespace: jaeger
+    chart: jaegertracing/jaeger-operator
+    version: 2.57.0
+    values:
+      - rbac:
+          clusterRole: true
+    atomic: true
+    disableValidation: true
+    needs:
+      - cert-manager/cert-manager
+  - name: grafana-operator
+    namespace: grafana-operator
+    chart: oci://ghcr.io/grafana/helm-charts/grafana-operator
+    version: v5.15.1
+    atomic: true
