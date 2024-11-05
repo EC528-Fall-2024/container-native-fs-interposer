@@ -39,9 +39,13 @@ jobs:
           kubectl -n jaeger wait deployments.apps/jaeger-jaeger-operator --for=condition=available
       - name: Apply CSI plugin manifests
         run: |
-          kubectl apply -k deploy
+          helm install \
+            csi-interposer ./helm \
+            --namespace csi-interposer \
+            --create-namespace
+
           kubectl -n csi-interposer rollout status daemonset csi-interposer
-          kubectl wait jaegers.jaegertracing.io jaeger-default --for=jsonpath='{.status.phase}'=Running
+          kubectl -n csi-interposer wait jaegers.jaegertracing.io jaeger-default --for=jsonpath='{.status.phase}'=Running
       - name: Apply CSI example manifests
         run: |
           kubectl apply -k examples
