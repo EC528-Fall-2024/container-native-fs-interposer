@@ -1,0 +1,15 @@
+kind: Grafana
+apiVersion: grafana.integreatly.org/v1beta1
+metadata:
+  name: grafana
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  config:
+    log:
+      mode: console
+    security:
+      admin_user: admin
+      admin_password: password
