@@ -29,9 +29,12 @@ jobs:
             --version v1.16.1 \
             --set crds.enabled=true
 
-          kubectl create namespace observability
-          kubectl apply -f https://github.com/jaegertracing/jaeger-operator/releases/download/v1.62.0/jaeger-operator.yaml
-          kubectl -n observability wait deployments.apps/jaeger-operator --for=condition=available
+          helm repo add jaegertracing https://jaegertracing.github.io/helm-charts --force-update
+          helm install \
+            jaeger jaegertracing/jaeger-operator \
+            --namespace jaeger \
+            --create-namespace \
+            --version v2.57.0
       - name: Apply CSI plugin manifests
         run: |
           kubectl apply -k deploy
