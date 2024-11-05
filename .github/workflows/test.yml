@@ -35,6 +35,8 @@ jobs:
             --namespace jaeger \
             --create-namespace \
             --version v2.57.0
+
+          kubectl -n jaeger wait deployments.apps/jaeger-jaeger-operator --for=condition=available
       - name: Apply CSI plugin manifests
         run: |
           kubectl apply -k deploy
