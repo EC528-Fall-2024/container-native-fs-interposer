@@ -1,0 +1,7 @@
+{
+    "metrics": true,
+    "traces": true,
+    "faultyIO": false,
+    "throttleIO": false,
+    "fakeIO": false
+}
