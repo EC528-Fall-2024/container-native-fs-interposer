@@ -39,6 +39,7 @@
             fuse3
             protobuf
             grpc
+            prometheus-cpp
             (opentelemetry-cpp.overrideAttrs rec {
               version = "1.17.0";
               src = fetchFromGitHub {
@@ -49,6 +50,7 @@
               };
             })
             abseil-cpp
+            nlohmann_json
           ];
           dontUseCmakeConfigure = true;
         };
