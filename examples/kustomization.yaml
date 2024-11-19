@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - minio.yaml
   - postgres.yaml
+  - fio.yaml
