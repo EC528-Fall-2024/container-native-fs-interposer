@@ -12,6 +12,9 @@ use kube::{
 };
 use kube::{Resource, ResourceExt};
 use nix::mount::MntFlags;
+use serde::de::IntoDeserializer;
+use serde::Deserialize;
+use std::collections::HashMap;
 use std::env;
 use std::{io::ErrorKind, path::Path};
 use tonic::{Request, Response, Status};
@@ -44,6 +47,9 @@ impl NodeService {
             .ok_or(Status::invalid_argument(
                 "missing persistentVolumeClaimName in volumeAttributes",
             ))?;
+
+        let cfg =
+            crate::config::Config::deserialize(request.volume_context.clone().into_deserializer())?;
 
         let command = request
             .volume_context
@@ -91,6 +97,11 @@ impl NodeService {
                         EnvVar {
                             name: "OTLP_ENDPOINT".to_string(),
                             value: Some(self.otlp_endpoint.to_string()),
+                            ..Default::default()
+                        },
+                        EnvVar {
+                            name: "CONFIG".to_string(),
+                            value: Some(serde_json::to_string(&cfg).unwrap()),
                             ..Default::default()
                         },
                     ]),

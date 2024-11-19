@@ -6,3 +6,4 @@ pub mod csi {
 
 pub mod identity;
 pub mod node;
+pub mod config;
