@@ -1,0 +1,40 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: fio-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+kind: Job
+apiVersion: batch/v1
+metadata:
+  name: fio
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: fio
+          image: docker.io/library/alpine:edge
+          command:
+            - sh
+            - -c
+            - |
+              set -euxo pipefail
+              apk add fio jq curl bash
+              bash <(curl https://gist.githubusercontent.com/dullage/7e7f7669ade208885314f83b1b3d6999/raw/708f178ae52db0ee3de8ad41ee4378c3bfd094de/cdm_fio.sh) /data
+          volumeMounts:
+            - mountPath: "/data"
+              name: data
+      volumes:
+        - name: data
+          csi:
+            driver: interposer.csi.example.com
+            volumeAttributes:
+              persistentVolumeClaimName: fio-pvc
+              command: interposer --foreground $(SOURCE_PATH) $(TARGET_PATH)
