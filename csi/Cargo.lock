@@ -275,6 +275,8 @@ dependencies = [
  "nix",
  "prost",
  "prost-types",
+ "serde",
+ "serde_json",
  "shlex",
  "tokio",
  "tokio-stream",
