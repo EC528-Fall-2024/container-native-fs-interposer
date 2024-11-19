@@ -63,7 +63,9 @@ std::string otlpEndpoint();
 // Tracing helper functions
 void initTracer(std::string serviceName, std::string hostName);
 void cleanupTracer();
+nostd::shared_ptr<trace_api::Tracer> getTracer(std::string libName);
 nostd::shared_ptr<trace_api::Span> getSpan(std::string libName, std::string spanName);
+trace_api::Scope getScope(std::string libName, nostd::shared_ptr<trace_api::Span> span);
 
 // Metrics helper functions
 void initMetrics();

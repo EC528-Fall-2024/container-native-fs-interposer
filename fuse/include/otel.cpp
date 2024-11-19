@@ -35,11 +35,32 @@ void cleanupTracer() {
 	trace_api::Provider::SetTracerProvider(none);
 }
 
-nostd::shared_ptr<trace_api::Span> getSpan(std::string libName, std::string spanName) {
+nostd::shared_ptr<trace_api::Tracer> getTracer(std::string libName) {
 	auto provider = trace_api::Provider::GetTracerProvider();
 	auto tracer = provider->GetTracer(libName, OPENTELEMETRY_SDK_VERSION);
+    return tracer;
+}
+
+trace_api::Scope getScope(std::string libName, nostd::shared_ptr<trace_api::Span> span) {
+    return getTracer(libName)->WithActiveSpan(span);
+} 
+
+nostd::shared_ptr<trace_api::Span> getSpan(std::string libName, std::string spanName) {
+	//auto provider = trace_api::Provider::GetTracerProvider();
+	//auto tracer = provider->GetTracer(libName, OPENTELEMETRY_SDK_VERSION);
+    auto tracer = getTracer(libName);
     return tracer->StartSpan(spanName);
 }
+
+/*
+nostd::shared_ptr<trace_api::Span> getSpan(
+    std::string libName, 
+    std::string spanName,
+    trace_api::SpanContext context) {
+	auto provider = trace_api::Provider::GetTracerProvider();
+	auto tracer = provider->GetTracer(libName, OPENTELEMETRY_SDK_VERSION);
+    return tracer->StartSpan(spanName, {{"context", context}});
+}*/
 
 // Metrics with OTEL
 std::shared_ptr<metric_api::MeterProvider> provider;
