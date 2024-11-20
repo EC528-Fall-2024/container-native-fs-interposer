@@ -8,10 +8,10 @@ std::string otlpEndpoint() {
         return "localhost:4317";
 }
 
-void initTracer(std::string serviceName, std::string hostName) {
+void initTracer(std::string serviceName, std::string hostName, std::string endpt) {
 	// Create OTLP exporter instance
 	otlp::OtlpGrpcExporterOptions opts;
-	opts.endpoint = otlpEndpoint();
+	opts.endpoint = endpt;
 	auto exporter = otlp::OtlpGrpcExporterFactory::Create(opts);
 	auto processor = std::unique_ptr<trace_sdk::SpanProcessor>(
 		new trace_sdk::SimpleSpanProcessor(std::move(exporter))

@@ -17,12 +17,12 @@ int main(int argc, char *argv[]) {
     json config = getConfig("./config/config.json");
     if (config == NULL) return 1;
 
-    bool addMetrics = config.at("metrics");
-    bool addTraces = config.at("traces");
-    bool addFaultyIO = config.at("faultyIO");
-    bool addThrottleIO = config.at("throttleIO");
-    bool addFakeIO = config.at("fakeIO");
-    
+    bool addMetrics = config.contains("metrics") && config["metrics"].contains("enabled") && config["metrics"]["enabled"];
+    bool addTraces = config.contains("traces") && config["traces"].contains("enabled") && config["traces"]["enabled"];
+    bool addFaultyIO = config.contains("faultyIO") && config["faultyIO"].contains("enabled") && config["faultyIO"]["enabled"];
+    bool addThrottleIO = config.contains("throttleIO") && config["throttleIO"].contains("enabled") && config["throttleIO"]["enabled"];
+    bool addFakeIO = config.contains("fakeIO") && config["fakeIO"].contains("enabled") && config["fakeIO"]["enabled"];
+
     // Utility layers
     fuse_lowlevel_ops metric_oper;
     if (addMetrics) {

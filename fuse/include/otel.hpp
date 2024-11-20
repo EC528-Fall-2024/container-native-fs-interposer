@@ -61,7 +61,7 @@ namespace context 	 = ot::context;
 std::string otlpEndpoint();
 
 // Tracing helper functions
-void initTracer(std::string serviceName, std::string hostName);
+void initTracer(std::string serviceName, std::string hostName, std::string endpt);
 void cleanupTracer();
 nostd::shared_ptr<trace_api::Tracer> getTracer(std::string libName);
 nostd::shared_ptr<trace_api::Span> getSpan(std::string libName, std::string spanName);

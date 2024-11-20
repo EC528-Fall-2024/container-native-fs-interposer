@@ -1,7 +1,22 @@
 {
-    "metrics": true,
-    "traces": true,
-    "faultyIO": false,
-    "throttleIO": false,
-    "fakeIO": false
+    "metrics": {
+        "enabled": true
+    },
+    "traces": {
+        "enabled": true,
+        "nestFileSpans": true,
+        "otelLibName": "fstracing",
+        "otelServiceName": "fs-workload-tracing",
+        "otelHostName": "local-host",
+        "otelEndpt": "localhost:4317"
+    },
+    "faultyIO": {
+        "enabled": false
+    },
+    "throttleIO": {
+        "enabled": false
+    },
+    "fakeIO": {
+        "enabled": false
+    }
 }
