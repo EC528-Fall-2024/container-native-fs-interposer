@@ -21,7 +21,7 @@ namespace trace 	= ot::trace;
 namespace nostd		= ot::nostd;
 
 static fuse_lowlevel_ops *tracing_next;
-static std::map<fuse_ino_t, nostd::shared_ptr<trace_api::Span>> fileSpans;
+static std::map<ino_t, nostd::shared_ptr<trace_api::Span>> fileSpans;
 
 static nostd::shared_ptr<trace_api::Span> parentSpan;
 static bool nestFileSpans = false;
@@ -31,14 +31,17 @@ static std::string HOST_NAME = "local-host";
 static std::string END_PT = "localhost:4317";
 
 static nostd::shared_ptr<trace_api::Span> getFileSpan(fuse_ino_t ino) {
+	Inode& inode = get_inode(ino);
+    ino_t inodeNum = inode.src_ino;
+
     // Add file span if it doesn't already exist
-    if (fileSpans.find(ino) == fileSpans.end()) {
+    if (fileSpans.find(inodeNum) == fileSpans.end()) {
         fileSpans.insert({
-            ino, 
-            getSpan(LIB_NAME, "Inode " + std::to_string(ino))
+            inodeNum, 
+            getSpan(LIB_NAME, "Inode " + std::to_string(inodeNum))
         });
     }
-    return fileSpans[ino];
+    return fileSpans[inodeNum];
 }
 
 

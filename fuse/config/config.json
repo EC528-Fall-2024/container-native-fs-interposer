@@ -15,8 +15,5 @@
     },
     "throttleIO": {
         "enabled": false
-    },
-    "fakeIO": {
-        "enabled": false
     }
 }
