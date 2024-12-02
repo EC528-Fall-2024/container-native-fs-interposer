@@ -51,7 +51,6 @@ kind load image-archive /tmp/csi-node.tar
 ```
 
 ### Deploy
-
 The project together with its dependencies can be deployed into the cluster with a single command:
 
 ```shell
@@ -59,6 +58,29 @@ helmfile apply
 ```
 
 The command would take a while.
+
+
+### Run Example Workload
+Example workloads are provided in the `examples` folder, they can be run with kubectl:
+
+```shell
+kubectl apply -f examples/minio.yaml
+```
+
+Progress of the job can be checked with:
+
+```shell
+kubectl get jobs.batch
+```
+
+And the following commands can be used to forward the jaeger and grafana dashboard to a local port:
+
+```shell
+# grafana
+kubectl -n csi-interposer port-forward services/grafana-service 3000:3000
+# jaeger
+kubectl -n csi-interposer port-forward services/jaeger-default-query 16686:16686
+```
 
 ## Project Description
 
