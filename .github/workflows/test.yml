@@ -32,6 +32,8 @@ jobs:
         run: |
           kubectl wait jobs/minio --for=condition=complete --timeout=600s
           kubectl logs jobs/minio
+          kubectl wait jobs/fio --for=condition=complete --timeout=600s
+          kubectl logs jobs/fio
       - name: Cleanup CSI example manifests
         run: |
           kubectl delete -k examples
