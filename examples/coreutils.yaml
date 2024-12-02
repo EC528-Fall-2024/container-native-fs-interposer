@@ -43,4 +43,5 @@ spec:
             driver: interposer.csi.example.com
             volumeAttributes:
               persistentVolumeClaimName: coreutils-pvc
+              traces: "true"
               metrics: "true"
