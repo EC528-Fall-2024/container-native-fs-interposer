@@ -30,12 +30,13 @@ spec:
             - |
               set -euxo pipefail
               apt-get update
-              apt-get install -y wget make gcc git
+              apt-get install -y wget make gcc
               cd /data
               wget https://mirrors.ocf.berkeley.edu/gnu/coreutils/coreutils-9.5.tar.gz
               tar xf coreutils-9.5.tar.gz
               FORCE_UNSAFE_CONFIGURE=1 ./coreutils-9.5/configure
               make -j $(nproc)
+              ./src/ls
       volumes:
         - name: data
           csi:
