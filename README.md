@@ -22,6 +22,13 @@ A kubernetes cluster which you have admin acccess to is required. It's recommend
 kind create cluster
 ```
 
+#### 2. Nix
+Nix is the build system we use for building the FUSE fileystem and the CSI plugin and bundling everything into a container image. It can be installed on any linux distribution with the following command:
+
+```shell
+sh <(curl -L https://nixos.org/nix/install) --daemon
+```
+
 ## Project Description
 
 ## 1.   Vision and Goals Of The Project:
