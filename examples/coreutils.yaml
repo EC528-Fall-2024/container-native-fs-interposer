@@ -1,0 +1,45 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: coreutils-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+kind: Job
+apiVersion: batch/v1
+metadata:
+  name: coreutils
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: coreutils
+          image: docker.io/library/ubuntu:24.10
+          volumeMounts:
+            - mountPath: "/data"
+              name: data
+          command:
+            - bash
+            - -c
+            - |
+              set -euxo pipefail
+              apt-get update
+              apt-get install -y wget make gcc git
+              cd /data
+              wget https://mirrors.ocf.berkeley.edu/gnu/coreutils/coreutils-9.5.tar.gz
+              tar xf coreutils-9.5.tar.gz
+              FORCE_UNSAFE_CONFIGURE=1 ./coreutils-9.5/configure
+              make -j $(nproc)
+      volumes:
+        - name: data
+          csi:
+            driver: interposer.csi.example.com
+            volumeAttributes:
+              persistentVolumeClaimName: coreutils-pvc
+              metrics: "true"
