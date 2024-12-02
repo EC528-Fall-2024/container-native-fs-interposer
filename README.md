@@ -44,6 +44,12 @@ nix build .#csi-node
 ./result > /tmp/csi-node.tar
 ```
 
+After building the image, it has to be loaded into the kubernetes cluster, if you are using kind, the following command does it for you:
+
+```shell
+kind load image-archive /tmp/csi-node.tar
+```
+
 ## Project Description
 
 ## 1.   Vision and Goals Of The Project:
