@@ -29,6 +29,13 @@ Nix is the build system we use for building the FUSE fileystem and the CSI plugi
 sh <(curl -L https://nixos.org/nix/install) --daemon
 ```
 
+#### 3. helm and helmfile
+We use [helm](https://helm.sh/) and [helmfile](https://helmfile.readthedocs.io/en/latest/) for deploying our project as well as its depenencies into kubernetes, please follow their respective installation guides to install helm and helmfile. [Installing Helm](https://helm.sh/docs/intro/install/), [Helmfile Installation](https://helmfile.readthedocs.io/en/latest/#installation). Since we already have nix installed, an alternative way is to use the following command:
+
+```shell
+nix profile install nixpkgs#helm nixpkgs#helmfile
+```
+
 ## Project Description
 
 ## 1.   Vision and Goals Of The Project:
