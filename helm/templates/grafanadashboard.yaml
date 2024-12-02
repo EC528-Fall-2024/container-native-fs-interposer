@@ -147,13 +147,13 @@ spec:
                 "uid": "${DS_JAEGER}"
               },
               "limit": 10000,
-              "operation": "Read",
+              "operation": "Rename",
               "queryType": "search",
               "refId": "A",
-              "service": "fs-workload-tracing"
+              "service": "traces"
             }
           ],
-          "title": "Read",
+          "title": "Rename",
           "type": "heatmap"
         },
         {
@@ -237,7 +237,7 @@ spec:
               "operation": "Write Buf",
               "queryType": "search",
               "refId": "A",
-              "service": "fs-workload-tracing"
+              "service": "traces"
             }
           ],
           "title": "Write",
