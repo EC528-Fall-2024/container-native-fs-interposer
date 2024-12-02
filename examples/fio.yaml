@@ -38,4 +38,3 @@ spec:
             volumeAttributes:
               persistentVolumeClaimName: fio-pvc
               metrics: "true"
-              traces: "true"

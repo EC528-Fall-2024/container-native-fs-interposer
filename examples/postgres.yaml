@@ -63,4 +63,3 @@ spec:
             volumeAttributes:
               persistentVolumeClaimName: postgres-pvc
               metrics: "true"
-              traces: "true"
