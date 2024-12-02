@@ -3,6 +3,8 @@ repositories:
     url: https://charts.jetstack.io
   - name: jaegertracing
     url: https://jaegertracing.github.io/helm-charts
+  - name: prometheus-community
+    url: https://prometheus-community.github.io/helm-charts
 helmDefaults:
   wait: true
   waitForJobs: true
@@ -24,6 +26,17 @@ releases:
     disableValidationOnInstall: true
     needs:
       - cert-manager/cert-manager
+  - name: prometheus
+    namespace: prometheus
+    chart: prometheus-community/prometheus
+    version: 26.0.0
+    values:
+      - alertmanager:
+          enabled: false
+        kube-state-metrics:
+          enabled: false
+        prometheus-node-exporter:
+          enabled: false
   - name: grafana-operator
     namespace: grafana-operator
     chart: oci://ghcr.io/grafana/helm-charts/grafana-operator
@@ -39,3 +52,4 @@ releases:
     needs:
       - jaeger/jaeger
       - grafana-operator/grafana-operator
+      - prometheus/prometheus
