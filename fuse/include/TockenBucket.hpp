@@ -59,7 +59,7 @@ void signal_handler(int signum) {
     (void)signum;
     std::lock_guard<std::mutex> lock(active_buckets_mutex);
     for (auto& bucket : active_buckets) {
-        bucket->add_tokens(1);
+        bucket->add_tokens(1 << 5);
     }
 }
 
