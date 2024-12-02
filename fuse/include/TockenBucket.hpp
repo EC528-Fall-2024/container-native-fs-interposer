@@ -14,8 +14,8 @@
 #include <iostream>
 #include <cstring>
 
-const size_t tokenTroughput = 1 << 5;
-const uint64_t initialtoken = 1 << 8;
+const size_t tokenTroughput = 1 << 13;
+const uint64_t initialtoken = 1;
 
 class TokenBucket {
 public:
@@ -59,7 +59,7 @@ void signal_handler(int signum) {
     (void)signum;
     std::lock_guard<std::mutex> lock(active_buckets_mutex);
     for (auto& bucket : active_buckets) {
-        bucket->add_tokens(1 << 8);
+        bucket->add_tokens(1);
     }
 }
 
