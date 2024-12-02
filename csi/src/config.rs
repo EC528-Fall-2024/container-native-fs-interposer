@@ -47,6 +47,8 @@ pub struct Config {
     pub metrics: bool,
     #[serde(default, deserialize_with = "bool_str")]
     pub traces: bool,
+    #[serde(default, rename = "tracesNested", deserialize_with = "bool_str")]
+    pub traces_nested: bool,
     #[serde(default, rename = "faultyIO", deserialize_with = "bool_str")]
     pub faulty_io: bool,
     #[serde(default, rename = "throttleIO", deserialize_with = "bool_str")]
@@ -63,7 +65,7 @@ impl Config {
             },
             traces: TracesConfig {
                 enabled: self.traces,
-                nest_file_spans: true,
+                nest_file_spans: self.traces_nested,
                 otel_lib_name: "csi-interposer".to_string(),
                 otel_service_name: "traces".to_string(),
                 otel_host_name: node_id.to_string(),
