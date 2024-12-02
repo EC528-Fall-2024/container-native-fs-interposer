@@ -37,3 +37,5 @@ spec:
             driver: interposer.csi.example.com
             volumeAttributes:
               persistentVolumeClaimName: fio-pvc
+              metrics: "true"
+              traces: "true"

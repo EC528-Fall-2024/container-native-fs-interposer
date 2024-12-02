@@ -62,3 +62,5 @@ spec:
             driver: interposer.csi.example.com
             volumeAttributes:
               persistentVolumeClaimName: postgres-pvc
+              metrics: "true"
+              traces: "true"
