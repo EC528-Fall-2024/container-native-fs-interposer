@@ -37,4 +37,3 @@ spec:
             driver: interposer.csi.example.com
             volumeAttributes:
               persistentVolumeClaimName: fio-pvc
-              command: interposer --foreground $(SOURCE_PATH) $(TARGET_PATH)

@@ -1,3 +1,6 @@
+use serde::Deserialize;
+use std::str::FromStr;
+
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct MetricsConfig {
     pub enabled: bool,
@@ -40,15 +43,15 @@ pub struct FuseConfig {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Config {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "bool_str")]
     pub metrics: bool,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "bool_str")]
     pub traces: bool,
-    #[serde(default, rename = "faultyIO")]
+    #[serde(default, rename = "faultyIO", deserialize_with = "bool_str")]
     pub faulty_io: bool,
-    #[serde(default, rename = "throttleIO")]
+    #[serde(default, rename = "throttleIO", deserialize_with = "bool_str")]
     pub throttle_io: bool,
-    #[serde(default, rename = "fakeIO")]
+    #[serde(default, rename = "fakeIO", deserialize_with = "bool_str")]
     pub fake_io: bool,
 }
 
@@ -74,4 +77,11 @@ impl Config {
             },
         }
     }
+}
+
+fn bool_str<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    bool::from_str(&String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
 }

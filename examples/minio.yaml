@@ -53,4 +53,5 @@ spec:
             driver: interposer.csi.example.com
             volumeAttributes:
               persistentVolumeClaimName: minio-pvc
-              command: interposer --foreground $(SOURCE_PATH) $(TARGET_PATH)
+              metrics: "true"
+              traces: "true"

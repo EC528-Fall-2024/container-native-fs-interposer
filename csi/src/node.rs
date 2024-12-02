@@ -53,17 +53,6 @@ impl NodeService {
         >(request.volume_context.clone().into_deserializer())
         .map_err(|_| Status::invalid_argument("failed to deserialize volumeAttributes"))?;
 
-        let command = request
-            .volume_context
-            .get("command")
-            .ok_or(Status::invalid_argument(
-                "missing command in volumeAttributes",
-            ))?;
-
-        let command = shlex::split(command).ok_or(Status::invalid_argument(
-            "unable to split command in volumeAttributes",
-        ))?;
-
         let source_path = "/lowerdir";
 
         Ok(Pod {
@@ -84,7 +73,12 @@ impl NodeService {
                 ),
                 restart_policy: Some("Never".to_string()),
                 containers: vec![Container {
-                    command: Some(command),
+                    command: Some(vec![
+                        "interposer".to_string(),
+                        "--foreground".to_string(),
+                        "$(SOURCE_PATH)".to_string(),
+                        "$(TARGET_PATH)".to_string(),
+                    ]),
                     env: Some(vec![
                         EnvVar {
                             name: "SOURCE_PATH".to_string(),
