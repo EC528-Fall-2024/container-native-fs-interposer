@@ -11,6 +11,17 @@
 **Team Members**: Julia Hua, Jiawei Xiang, Hilario Gonzalez, Shamir Legaspi, Juncheng Cao  
 **Mentor**: Vasily Tarasov, Alex Merenstein  
 
+## Installation
+
+### Prerequisites
+
+#### 1. Kubernetes Cluster
+A kubernetes cluster which you have admin acccess to is required. It's recommended to create a test cluster with [kind](https://github.com/kubernetes-sigs/kind) if you don't have one readily available.
+
+```shell
+kind create cluster
+```
+
 ## Project Description
 
 ## 1.   Vision and Goals Of The Project:
