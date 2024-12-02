@@ -26,8 +26,8 @@ spec:
             - -c
             - |
               set -euxo pipefail
-              apk add fio jq curl bash
-              bash <(curl https://gist.githubusercontent.com/dullage/7e7f7669ade208885314f83b1b3d6999/raw/708f178ae52db0ee3de8ad41ee4378c3bfd094de/cdm_fio.sh) /data
+              apk add fio jq curl bash sed
+              bash <(curl https://gist.githubusercontent.com/dullage/7e7f7669ade208885314f83b1b3d6999/raw/708f178ae52db0ee3de8ad41ee4378c3bfd094de/cdm_fio.sh | sed -e "s|LOOPS=5|LOOPS=1|" -e "s|SIZE=256|SIZE=32|") /data
           volumeMounts:
             - mountPath: "/data"
               name: data
