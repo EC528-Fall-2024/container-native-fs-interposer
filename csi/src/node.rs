@@ -103,7 +103,12 @@ impl NodeService {
                         },
                         EnvVar {
                             name: "CONFIG".to_string(),
-                            value: Some(serde_json::to_string(&cfg).unwrap()),
+                            value: Some(
+                                serde_json::to_string(
+                                    &cfg.render(&self.node_id, &self.otlp_endpoint),
+                                )
+                                .unwrap(),
+                            ),
                             ..Default::default()
                         },
                     ]),
