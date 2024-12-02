@@ -55,6 +55,7 @@ executable(
   'include/workload_tracing.cpp',
   'include/metric_collection.cpp',
   'include/config_parser.cpp',
+  cpp_args : '-DHAVE_UTIMENSAT',
   dependencies: [thread, fuse, ot_dep, proto_dep, grpc_dep, prom_dep],
   install: true
 )
