@@ -54,7 +54,7 @@ spec:
             - -c
             - |
               set -euxo pipefail
-              pgbench -i -s 100
+              pgbench -i -s 2
               pgbench -c 10 -t 100
       volumes:
         - name: data
