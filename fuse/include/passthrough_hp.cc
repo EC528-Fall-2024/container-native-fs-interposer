@@ -1258,7 +1258,7 @@ cxxopts::ParseResult parse_options(int argc, char **argv) {
     if (!found_fsname) {
         flattened_mount_opts.push_back("fsname=" + fs.source);
     }
-    flattened_mount_opts.push_back("default_permissions");
+    flattened_mount_opts.push_back("allow_other");
     fs.fuse_mount_options = string_join(flattened_mount_opts, ',');
     return options;
 }
