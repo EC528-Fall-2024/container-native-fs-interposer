@@ -36,6 +36,8 @@ jobs:
           kubectl logs jobs/fio
           kubectl wait jobs/coreutils --for=condition=complete --timeout=600s
           kubectl logs jobs/coreutils
+          kubectl wait jobs/postgres --for=condition=complete --timeout=600s
+          kubectl logs jobs/postgres
       - name: Cleanup CSI example manifests
         run: |
           kubectl delete -k examples

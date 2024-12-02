@@ -1,0 +1,65 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: postgres-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+kind: Job
+apiVersion: batch/v1
+metadata:
+  name: postgres
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      initContainers:
+        - name: postgres
+          image: docker.io/library/postgres:17
+          restartPolicy: Always
+          env:
+            - name: POSTGRES_PASSWORD
+              value: password
+          startupProbe:
+            exec:
+              command:
+                - pg_isready
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+          volumeMounts:
+            - mountPath: "/var/lib/postgresql/data"
+              name: data
+      containers:
+        - name: pgbench
+          image: docker.io/library/postgres:17
+          env:
+            - name: PGHOST
+              value: 127.0.0.1
+            - name: PGUSER
+              value: postgres
+            - name: PGDATABASE
+              value: postgres
+            - name: PGPASSWORD
+              value: password
+          command:
+            - bash
+            - -c
+            - |
+              set -euxo pipefail
+              pgbench -i -s 100
+              pgbench -c 10 -t 100
+      volumes:
+        - name: data
+          csi:
+            driver: interposer.csi.example.com
+            volumeAttributes:
+              persistentVolumeClaimName: postgres-pvc
+              metrics: "true"
