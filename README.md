@@ -50,6 +50,16 @@ After building the image, it has to be loaded into the kubernetes cluster, if yo
 kind load image-archive /tmp/csi-node.tar
 ```
 
+### Deploy
+
+The project together with its dependencies can be deployed into the cluster with a single command:
+
+```shell
+helmfile apply
+```
+
+The command would take a while.
+
 ## Project Description
 
 ## 1.   Vision and Goals Of The Project:
