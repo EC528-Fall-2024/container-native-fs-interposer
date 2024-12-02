@@ -30,10 +30,18 @@ sh <(curl -L https://nixos.org/nix/install) --daemon
 ```
 
 #### 3. helm and helmfile
-We use [helm](https://helm.sh/) and [helmfile](https://helmfile.readthedocs.io/en/latest/) for deploying our project as well as its depenencies into kubernetes, please follow their respective installation guides to install helm and helmfile. [Installing Helm](https://helm.sh/docs/intro/install/), [Helmfile Installation](https://helmfile.readthedocs.io/en/latest/#installation). Since we already have nix installed, an alternative way is to use the following command:
+We use [helm](https://helm.sh/) and [helmfile](https://helmfile.readthedocs.io/en/latest/) for deploying our project as well as its depenencies into kubernetes, please follow their respective installation guides to install helm and helmfile: [Installing Helm](https://helm.sh/docs/intro/install/), [Helmfile Installation](https://helmfile.readthedocs.io/en/latest/#installation). Since we already have nix installed, an alternative way is to use the following command:
 
 ```shell
 nix profile install nixpkgs#helm nixpkgs#helmfile
+```
+
+### Build Container Image
+The container image can be built with the following commands, after which the image tarball would be placed at `/tmp/csi-node.tar`:
+
+```shell
+nix build .#csi-node
+./result > /tmp/csi-node.tar
 ```
 
 ## Project Description
