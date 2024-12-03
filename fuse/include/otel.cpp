@@ -52,16 +52,6 @@ nostd::shared_ptr<trace_api::Span> getSpan(std::string libName, std::string span
     return tracer->StartSpan(spanName);
 }
 
-/*
-nostd::shared_ptr<trace_api::Span> getSpan(
-    std::string libName, 
-    std::string spanName,
-    trace_api::SpanContext context) {
-	auto provider = trace_api::Provider::GetTracerProvider();
-	auto tracer = provider->GetTracer(libName, OPENTELEMETRY_SDK_VERSION);
-    return tracer->StartSpan(spanName, {{"context", context}});
-}*/
-
 // Metrics with OTEL
 std::shared_ptr<metric_api::MeterProvider> provider;
 const std::string name = "fuse_otel_";

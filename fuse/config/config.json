@@ -1,6 +1,11 @@
 {
     "metrics": {
-        "enabled": true
+        "enabled": true,
+        "readCounter": true,
+        "writeCounter": false,
+        "readLatencyHist": true,
+        "writeLatencyHist": true,
+        "dirCounter": false
     },
     "traces": {
         "enabled": true,
