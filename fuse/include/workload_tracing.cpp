@@ -23,7 +23,6 @@ namespace nostd		= ot::nostd;
 static fuse_lowlevel_ops *tracing_next;
 static std::map<ino_t, nostd::shared_ptr<trace_api::Span>> fileSpans;
 
-static nostd::shared_ptr<trace_api::Span> parentSpan;
 static bool nestFileSpans = false;
 static std::string LIB_NAME = "fstracing";
 static std::string SERVICE_NAME = "fs-workload-tracing";
@@ -67,6 +66,7 @@ static void setAttribute(const nostd::shared_ptr<trace::Span>& span, fuse_ino_t 
 
 static void tracing_init(void *userdata, struct fuse_conn_info *conn)
 {
+    fileSpans.clear();
 	initTracer(SERVICE_NAME, HOST_NAME, END_PT);
 	auto span = getSpan(LIB_NAME, "Init");
 	tracing_next->init(userdata, conn);
@@ -77,8 +77,7 @@ static void tracing_destroy(void *userdata) {
     for (const auto &fileSpan : fileSpans) {
         fileSpan.second->End();
     }
-
-	parentSpan->End();
+    fileSpans.clear();
 
     cleanupTracer();
 	tracing_next->destroy(userdata);
