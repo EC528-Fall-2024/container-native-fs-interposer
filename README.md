@@ -22,11 +22,19 @@ A kubernetes cluster which you have admin acccess to is required. It's recommend
 kind create cluster
 ```
 
-#### 2. Nix
+#### 2. Nix (optional)
 Nix is the build system we use for building the FUSE fileystem and the CSI plugin and bundling everything into a container image. It can be installed on any linux distribution with the following command:
 
 ```shell
 sh <(curl -L https://nixos.org/nix/install) --daemon
+```
+
+If you choose not to install nix, you can pull the prebuilt image from ghcr.io.
+
+```shell
+docker login ghcr.io # login using your github username and personal access token
+docker pull ghcr.io/ec528-fall-2024/container-native-fs-interposer/csi-plugin:v0.0.4
+docker tag ghcr.io/ec528-fall-2024/container-native-fs-interposer/csi-plugin:v0.0.4 docker.io/library/csi-node:latest
 ```
 
 #### 3. helm and helmfile
@@ -37,7 +45,7 @@ nix profile install nixpkgs#helm nixpkgs#helmfile
 ```
 
 ### Build Container Image
-The container image can be built with the following commands, after which the image tarball would be placed at `/tmp/csi-node.tar`:
+The container image can be built with the following commands, after which the image tarball would be placed at `/tmp/csi-node.tar`, if you've choosen to pull the prebuilt image, please skip this step:
 
 ```shell
 nix build .#csi-node
@@ -48,6 +56,8 @@ After building the image, it has to be loaded into the kubernetes cluster, if yo
 
 ```shell
 kind load image-archive /tmp/csi-node.tar
+# or below for prebuilt image
+kind load docker-image docker.io/library/csi-node:latest
 ```
 
 ### Deploy
