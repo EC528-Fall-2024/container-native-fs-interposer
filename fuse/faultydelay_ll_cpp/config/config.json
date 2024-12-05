@@ -1,0 +1,30 @@
+{
+    "metrics": {
+        "enabled": true,
+        "readCounter": true,
+        "writeCounter": false,
+        "readLatencyHist": true,
+        "writeLatencyHist": true,
+        "dirCounter": false
+    },
+    "traces": {
+        "enabled": true,
+        "nestFileSpans": true,
+        "otelLibName": "fstracing",
+        "otelServiceName": "fs-workload-tracing",
+        "otelHostName": "local-host",
+        "otelEndpt": "localhost:4317"
+    },
+    "faultyIO": {
+        "enabled": false,
+        "local_log_path": "usr/src/myapp/testmount/error_log.txt",
+        "fail_rate": 6,
+        "use_sednum": false,
+        "seed": 0,
+        "delay_time": 3
+
+    },
+    "throttleIO": {
+        "enabled": false
+    }
+}

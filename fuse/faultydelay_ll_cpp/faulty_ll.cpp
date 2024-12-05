@@ -5,7 +5,7 @@
 	In the functions lo_read(), lo_write_buf() I introduced randomized IO errors, data truncation, and delays.
 	I also created a helper function to write to a log that will track when these errors have occured, so that we have a concrete artifact to compare against that documented all the errors
 
-	g++ -Wall -D_FILE_OFFSET_BITS=64 faulty_ll.cpp -I/usr/local/include -L/usr/local/lib -lopentelemetry_trace -lopentelemetry_resources -lopentelemetry_exporter_ostream_span -lopentelemetry_common `pkg-config fuse3 --cflags --libs` -o faulty_ll
+	g++ -Wall -D_FILE_OFFSET_BITS=64 faulty_ll.cpp include/config_parser.cpp -I/usr/local/include -I./include -L/usr/local/lib -lopentelemetry_trace -lopentelemetry_resources -lopentelemetry_exporter_ostream_span -lopentelemetry_common `pkg-config fuse3 --cflags --libs` -o faulty_ll
 	docker build -t my-fuse-app .
 	docker images //list images
 	docker rmi <image_name> //remove image
@@ -49,16 +49,10 @@ target_link_libraries(foo PRIVATE ${OPENTELEMETRY_CPP_LIBRARIES}
  *
  * Compile with:
  *
- *     g++ -Wall -D_FILE_OFFSET_BITS=64 faulty_ll.cpp -I/usr/local/include -L/usr/local/lib -lopentelemetry_trace -lopentelemetry_resources -lopentelemetry_exporter_ostream_span -lopentelemetry_common `pkg-config fuse3 --cflags --libs` -o faulty_ll
+ * 	   g++ -Wall -D_FILE_OFFSET_BITS=64 faulty_ll.cpp include/config_parser.cpp -I/usr/local/include -I./include -L/usr/local/lib -lopentelemetry_trace -lopentelemetry_resources -lopentelemetry_exporter_ostream_span -lopentelemetry_common `pkg-config fuse3 --cflags --libs` -o faulty_ll
  */
 
 #define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 16)
-
-#define ERRLOGFILE "usr/src/myapp/testmount/error_log.txt" //for function calls to the error log
-#define FAILRATE 6 //likelihood of failure = 1/failrate
-#define CONFIGSEED 0 //user can set configseed to one and it will use default value 0 or they can choose their own seed by setting seednum
-#define SEEDNUM 0 //default 0 user can change
-#define DELAYTIME 3
 
 #include <fuse_lowlevel.h>
 #include <unistd.h>
@@ -79,6 +73,7 @@ target_link_libraries(foo PRIVATE ${OPENTELEMETRY_CPP_LIBRARIES}
 #include <time.h>
 #include <iostream>
 #include <stdarg.h>
+#include "./include/config_parser.hpp"
 
 #include "libfuse/passthrough_helpers.h"
 
@@ -203,6 +198,12 @@ static void passthrough_ll_help(void)
 "    -o cache=always        Cache always\n" << std::endl;
 }
 
+std::string ERRLOGFILE = "usr/src/myapp/testmount/error_log.txt"; //for function calls to the error log
+int FAILRATE = 6; //likelihood of failure = 1/failrate
+bool CONFIGSEED = 0; //user can set configseed to one and it will use default value 0 or they can choose their own seed by setting seednum
+int SEEDNUM = 0; //default 0 user can change
+int DELAYTIME = 3;
+
 // OTEL helper functions:
 namespace trace = opentelemetry::trace;
 namespace sdktrace = opentelemetry::sdk::trace;
@@ -226,7 +227,7 @@ void InitTracer(){
     }
 
 
-    sdktrace::BatchSpanProcessorOptions bspOpts{};
+    //sdktrace::BatchSpanProcessorOptions bspOpts{};
 	auto console_exporter = std::make_unique<trace_exporter::OStreamSpanExporter>(*file_handle);
     //auto console_exporter = std::unique_ptr<sdktrace::SpanExporter>(new trace_exporter::OStreamSpanExporter);
 	//auto console_exporter = std::unique_ptr<sdktrace::SpanExporter>(new trace_exporter::OStreamSpanExporter(file_handle));
@@ -398,9 +399,9 @@ void logError(const std::string &error_message){
 }
 */
 //local file logging
-void log_error(const char *error_message, const char *file_name,fuse_ino_t ino){
+void log_error(const char *error_message, std::string file_name,fuse_ino_t ino){
     // Open the file in append mode ("a"), creates it if it doesn't exist
-    FILE *file = fopen(file_name, "a");
+    FILE *file = fopen(file_name.c_str(), "a");
 
     if (file == nullptr) {//error handle
         std::cout << ("Error opening file!\n") << std::endl;
@@ -451,23 +452,17 @@ void log_error_fh(const char *error_message, const char *file_name, fuse_ino_t i
 //Faulty IO helpers
 bool rand_is_init = false;
 void init_random_seed(){
-	switch(CONFIGSEED){
-		case 0:
-			if(!rand_is_init){//seed once per mount
-    			srand(static_cast<unsigned>(time(nullptr)));
-				rand_is_init = true;
-			}
-			break;
-		case 1:
-			if(!rand_is_init){//seed once per mount
-    			srand(static_cast<unsigned>(SEEDNUM));//custom seed if user wants to control/if they want consistency
-				rand_is_init = true;
-			}
-			break;
-		default:
-		break;
+	if(CONFIGSEED){
+		if(!rand_is_init){//seed with seednum when mounted
+    		srand(static_cast<unsigned>(SEEDNUM));//custom seed if user wants to control/if they want consistency
+			rand_is_init = true;
+		}
+	}else{
+		if(!rand_is_init){//Seed randomly when mounted
+    		srand(static_cast<unsigned>(time(nullptr)));
+			rand_is_init = true;
+		}
 	}
-	
 }
 
 
@@ -1677,6 +1672,21 @@ static const struct fuse_lowlevel_ops lo_oper = {
 	.lseek		= lo_lseek,
 };
 
+void config_faulty(std::string config_path) {
+    // Configs
+    json config = getConfig(config_path);
+
+    if (config.contains("faultyIO")) {
+        auto configFaulty = config["faultyIO"];
+		if(configFaulty.contains("local_log_path")) ERRLOGFILE = configFaulty["local_log_path"];
+		if(configFaulty.contains("fail_rate")) FAILRATE = configFaulty["fail_rate"];
+		if(configFaulty.contains("use_seednum")) SEEDNUM = configFaulty["use_seednum"];
+		if(configFaulty.contains("seed")) SEEDNUM = configFaulty["seed"];
+		if(configFaulty.contains("delay_time")) DELAYTIME = configFaulty["delay_time"];
+    }
+	return;
+}
+
 int main(int argc, char *argv[])
 {
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
@@ -1694,6 +1704,8 @@ int main(int argc, char *argv[])
 	lo.root.next = lo.root.prev = &lo.root;
 	lo.root.fd = -1;
 	lo.cache = CACHE_NORMAL;
+
+	config_faulty("./config/config.json");
 
 	if (fuse_parse_cmdline(&args, &opts) != 0)
 		return 1;

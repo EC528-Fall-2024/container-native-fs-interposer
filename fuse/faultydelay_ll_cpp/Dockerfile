@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 RUN apt-get update && apt-get install -y \
-    libudev-dev libevdev-dev libsystemd-dev libglib2.0-dev libjson-glib-dev libunistring-dev check valgrind swig libgtest-dev libbenchmark-dev protobuf-compiler libprotobuf-dev autoconf libtool libgmock-dev \
+    libudev-dev libevdev-dev libsystemd-dev libglib2.0-dev libjson-glib-dev libunistring-dev check valgrind swig libgtest-dev libbenchmark-dev protobuf-compiler libprotobuf-dev autoconf libtool libgmock-dev nlohmann-json3-dev\
     && rm -rf /var/lib/apt/lists/*
 
 RUN apt-get update && apt-get install -y \
@@ -93,7 +93,7 @@ RUN cd fuse-3.16.2 \
     && ninja -C build install
 
 RUN mkdir mountpoint \
-    && g++ -Wall -D_FILE_OFFSET_BITS=64 faulty_ll.cpp -I/usr/local/include -L/usr/local/lib -lopentelemetry_trace -lopentelemetry_resources -lopentelemetry_exporter_ostream_span -lopentelemetry_common `pkg-config fuse3 --cflags --libs` -o faulty_ll \
+    && g++ -Wall -D_FILE_OFFSET_BITS=64 faulty_ll.cpp include/config_parser.cpp -I/usr/local/include -I./include -L/usr/local/lib -lopentelemetry_trace -lopentelemetry_resources -lopentelemetry_exporter_ostream_span -lopentelemetry_common `pkg-config fuse3 --cflags --libs` -o faulty_ll \
     && ldconfig \
     && mkdir testmount
 
