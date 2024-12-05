@@ -1,11 +1,10 @@
 /*
-  FUSE: Filesystem in Userspace
-  Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
+  FUSE: Fault Injection Filesystem in Userspace; Hilario Gonzalez Fall 2024
+  Adapted from fuse lowlevel passthrough fs: Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
   
-	In the functions lo_read(), lo_write_buf(), lo_getattr(), lo_setattr(), and lo_fsync() I introduced randomized io errors, data truncation, and delays.
+	In the functions lo_read(), lo_write_buf() I introduced randomized IO errors, data truncation, and delays.
 	I also created a helper function to write to a log that will track when these errors have occured, so that we have a concrete artifact to compare against that documented all the errors
 
-	g++ -Wall -D_FILE_OFFSET_BITSl=64 faulty_ll.cpp -I//usr/local/include/fuse3 `pkg-config fuse3 --cflags --libs` -o faulty_ll
 	g++ -Wall -D_FILE_OFFSET_BITS=64 faulty_ll.cpp -I/usr/local/include -L/usr/local/lib -lopentelemetry_trace -lopentelemetry_resources -lopentelemetry_exporter_ostream_span -lopentelemetry_common `pkg-config fuse3 --cflags --libs` -o faulty_ll
 	docker build -t my-fuse-app .
 	docker images //list images
@@ -24,11 +23,6 @@
 	kubectl exec -it fuse-faulty -- /bin/bash  ##use this to get a bash shell in the container
 	kubectl delete pod fuse-pod ##use this to clean up
 
-
-
-
-  This program can be distributed under the terms of the GNU GPLv2.
-  See the file COPYING.
 */
 
 /* Openttelemetry in another cmake possibly?
@@ -41,15 +35,10 @@ target_link_libraries(foo PRIVATE ${OPENTELEMETRY_CPP_LIBRARIES}
 
 /** @file
  *
- * This file system mirrors the existing file system hierarchy of the
+ * This file system injects IO faults into the existing file system hierarchy of the
  * system, starting at the root file system. This is implemented by
  * just "passing through" all requests to the corresponding user-space
- * libc functions. This implementation uses the low-level API. Its performance should
- * be the least bad among the three, but many operations are not
- * implemented. In particular, it is not possible to remove files (or
- * directories) because the code necessary to defer actual removal
- * until the file is not opened anymore would make the example much
- * more complicated.
+ * libc functions, after simulating faults. This implementation uses the low-level API.
  *
  * When writeback caching is enabled (-o writeback mount option), it
  * is only possible to write to files for which the mounting user has
@@ -69,7 +58,7 @@ target_link_libraries(foo PRIVATE ${OPENTELEMETRY_CPP_LIBRARIES}
 #define FAILRATE 6 //likelihood of failure = 1/failrate
 #define CONFIGSEED 0 //user can set configseed to one and it will use default value 0 or they can choose their own seed by setting seednum
 #define SEEDNUM 0 //default 0 user can change
-#define DELAYTIME 5
+#define DELAYTIME 3
 
 #include <fuse_lowlevel.h>
 #include <unistd.h>
