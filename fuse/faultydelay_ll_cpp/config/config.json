@@ -19,10 +19,9 @@
         "enabled": false,
         "local_log_path": "usr/src/myapp/testmount/error_log.txt",
         "fail_rate": 6,
-        "use_sednum": false,
-        "seed": 0,
+        "use_seednum": true,
+        "seed": 42,
         "delay_time": 3
-
     },
     "throttleIO": {
         "enabled": false

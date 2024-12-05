@@ -38,7 +38,7 @@ List all containers: docker ps --all
 
 Compile File System in container: g++ -Wall -D_FILE_OFFSET_BITS=64 faulty_ll.cpp -I/usr/local/include -L/usr/local/lib -lopentelemetry_trace -lopentelemetry_resources -lopentelemetry_exporter_ostream_span -lopentelemetry_common `pkg-config fuse3 --cflags --libs` -o faulty_ll
 
-Faulty Filesystem Configurables:
+Faulty Filesystem Configurables, can be set in config file:
 
 FAILRATE: likelihood of failure = 1/failrate
 CONFIGSEED: 0 = use random seed; 1 = use default or user-defined seed

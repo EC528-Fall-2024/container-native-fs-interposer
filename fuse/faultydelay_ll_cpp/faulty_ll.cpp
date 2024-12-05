@@ -1238,7 +1238,7 @@ static void lo_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 static void lo_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 		    off_t offset, struct fuse_file_info *fi)
 {
-	init_random_seed();
+	//init_random_seed();
 	int is_faulty = 0;
 
 	//simulate failed io
@@ -1311,7 +1311,7 @@ static void lo_write_buf(fuse_req_t req, fuse_ino_t ino,
 {
 	ssize_t res;
 
-	init_random_seed();
+	//init_random_seed();
 	int is_faulty = 0;
 
 	//simulate IO error
@@ -1706,6 +1706,7 @@ int main(int argc, char *argv[])
 	lo.cache = CACHE_NORMAL;
 
 	config_faulty("./config/config.json");
+	init_random_seed();
 
 	if (fuse_parse_cmdline(&args, &opts) != 0)
 		return 1;
