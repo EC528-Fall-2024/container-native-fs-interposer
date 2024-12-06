@@ -2,7 +2,8 @@
   FUSE: Fault Injection Filesystem in Userspace; Hilario Gonzalez Fall 2024
   Adapted from fuse lowlevel passthrough fs: Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
   
-	In the functions lo_read(), lo_write_buf() I introduced randomized IO errors, data truncation, and delays.
+	In the functions lo_read(), lo_write_buf(), lo_flush(), lo_do_readdir(), lo_open(), lo_opendir() I introduced randomized IO errors, data truncation, and delays.
+	Several configurable parameters can be adjusted in config file to customize fs performance.
 	I also created a helper function to write to a log that will track when these errors have occured, so that we have a concrete artifact to compare against that documented all the errors
 
 	g++ -Wall -D_FILE_OFFSET_BITS=64 faulty_ll.cpp include/config_parser.cpp -I/usr/local/include -I./include -L/usr/local/lib -lopentelemetry_trace -lopentelemetry_resources -lopentelemetry_exporter_ostream_span -lopentelemetry_common `pkg-config fuse3 --cflags --libs` -o faulty_ll
