@@ -41,6 +41,7 @@ releases:
           prometheus.yml:
             scrape_configs:
               - job_name: csi-interposer
+                scrape_interval: 1s
                 kubernetes_sd_configs:
                   - role: pod
                     selectors:
