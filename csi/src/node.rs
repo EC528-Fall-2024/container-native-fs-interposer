@@ -1,7 +1,8 @@
 use crate::csi::v1::node_server::Node;
 use crate::csi::v1::*;
 use k8s_openapi::api::core::v1::{
-    Container, HostPathVolumeSource, Pod, PodSpec, SecurityContext, Volume, VolumeMount,
+    Container, ContainerPort, HostPathVolumeSource, Pod, PodSpec, SecurityContext, Volume,
+    VolumeMount,
 };
 use k8s_openapi::api::core::v1::{EnvVar, PersistentVolumeClaimVolumeSource};
 use kube::runtime::conditions;
@@ -59,6 +60,13 @@ impl NodeService {
             metadata: ObjectMeta {
                 name: Some(format!("{}-{}", pod.name_unchecked(), request.volume_id)),
                 namespace: pod.namespace(),
+                labels: Some(
+                    [(
+                        "interposer.csi.example.com/metrics".to_string(),
+                        "true".to_string(),
+                    )]
+                    .into(),
+                ),
                 owner_references: Some(pod.owner_ref(&()).into_iter().collect()),
                 ..Default::default()
             },
@@ -79,6 +87,10 @@ impl NodeService {
                         "$(SOURCE_PATH)".to_string(),
                         "$(TARGET_PATH)".to_string(),
                     ]),
+                    ports: Some(vec![ContainerPort {
+                        container_port: 8080,
+                        ..Default::default()
+                    }]),
                     env: Some(vec![
                         EnvVar {
                             name: "SOURCE_PATH".to_string(),

@@ -57,7 +57,7 @@ std::shared_ptr<metric_api::MeterProvider> provider;
 const std::string name = "fuse_otel_";
 const std::string version = "1.2.0";
 const std::string schema = "https://opentelemetry.io/schemas/1.2.0";
-const std::string address = "localhost:8080";
+const std::string address = "0.0.0.0:8080";
 
 void initMetrics() {
 	/*// OTLP GRPC exporter
