@@ -199,7 +199,8 @@ static void passthrough_ll_help(void)
 }
 
 std::string ERRLOGFILE = "usr/src/myapp/testmount/error_log.txt"; //for function calls to the error log
-int FAILRATE = 6; //likelihood of failure = 1/failrate
+int FFAILRATE = 0; //likelihood of file failure = 1/failrate
+int DFAILRATE = 0; //likelihood of directory failure
 bool CONFIGSEED = 0; //user can set configseed to one and it will use default value 0 or they can choose their own seed by setting seednum
 int SEEDNUM = 0; //default 0 user can change
 int DELAYTIME = 3;
@@ -217,21 +218,18 @@ namespace logs_sdk = opentelemetry::sdk::logs;
 //global to be flushed elsewhere
 std::shared_ptr<std::ofstream> file_handle;
 
+//Otel Setup
 void InitTracer(){
-    //closest working:
-	
-	std::string file_path =  "usr/src/myapp/testmount/ostream_out.txt";
+    std::string file_path =  "usr/src/myapp/testmount/ostream_out.txt";
     file_handle = std::make_shared<std::ofstream>(file_path.c_str());
     if (!file_handle->is_open()) {
             throw std::runtime_error("Failed to open output file for tracing.");
     }
 
 
-    //sdktrace::BatchSpanProcessorOptions bspOpts{};
+    //sdktrace::BatchSpanProcessorOptions bspOpts{}; //for use with batch span processor
 	auto console_exporter = std::make_unique<trace_exporter::OStreamSpanExporter>(*file_handle);
-    //auto console_exporter = std::unique_ptr<sdktrace::SpanExporter>(new trace_exporter::OStreamSpanExporter);
-	//auto console_exporter = std::unique_ptr<sdktrace::SpanExporter>(new trace_exporter::OStreamSpanExporter(file_handle));
-	//auto processor = std::make_unique<sdktrace::BatchSpanProcessor>(std::move(console_exporter), bspOpts);
+    //auto processor = std::make_unique<sdktrace::BatchSpanProcessor>(std::move(console_exporter), bspOpts); //replace with processor if want batched
 	auto processor = std::make_unique<sdktrace::SimpleSpanProcessor>(std::move(console_exporter));
     
 	resource::ResourceAttributes attributes = {
@@ -246,10 +244,33 @@ void InitTracer(){
     trace::Provider::SetTracerProvider(nostd_provider);
 }
 
+/* Initialization for using OTEL GRPC to Jaeger
+void InitTracer(){
+	//OTLP GRPC Exporter init
+	otlp::OtlpGrpcExporterOptions opts;
+	opts.endpoint = "localhost:4317"; //need jaeger endpoint
+	opts.use_ssl_credentials = true;
+	opts.ssl_credentials_cacert_as_string = "ssl-certificate";
+
+	auto exporter = std::make_unique<otlp::OtlpGrpcExporter>(opts);
+	auto processor = std::make_unique<sdktrace::SimpleSpanProcessor>(std::move(exporter));
+  	
+  	resource::ResourceAttributes attributes = {
+        {resource::SemanticConventions::kServiceName, "fs-faulty-IO"},
+        {resource::SemanticConventions::kHostName, "local-host"}
+    };
+    auto resource = resource::Resource::Create(attributes);
+	auto provider = std::make_shared<sdktrace::TracerProvider>(std::move(processor), resource);
+	auto nostd_provider = opentelemetry::nostd::shared_ptr<trace::TracerProvider>(provider);
+  	// Set the global trace provider
+	trace::Provider::SetTracerProvider(nostd_provider);
+  
+}
+*/
+
 bool otel_is_init = false;
 void otel_init(){
     InitTracer();
-    //InitLogger();
     otel_is_init = true;
     return;
 }
@@ -271,133 +292,30 @@ opentelemetry::nostd::shared_ptr<opentelemetry::trace::Span> traceAndSpan(const 
     // Start tracing
     auto tracer = opentelemetry::trace::Provider::GetTracerProvider()->GetTracer("faulty_file_system_tracer");
     return tracer->StartSpan(whereFault); //span is associated with one IO operation which could have more than one fault 
-        //use this function by  calling auto span = traceAndSpan("fault_location");
-        //after an operation calls this function it must also call "span->End();"
-        //span->AddEvent("event_name", {{"key", "value"}});
-        //span->SetAttribute("attribute_key", "attribute_value");
-}
-/*
-
-bool otel_is_init = false;
-void otel_init(){
-	InitTracer();
-	//InitLogger();
-
-    return;
+    //use this function by  calling auto span = traceAndSpan("fault_location");
+    //after an operation calls this function it must also call "span->End();"
+    //span->AddEvent("event_name", {{"key", "value"}});
+    //span->SetAttribute("attribute_key", "attribute_value");
 }
 
-void InitTracer(){
-	//closest working:
-	sdktrace::BatchSpanProcessorOptions bspOpts{};
-    auto console_exporter = std::make_unique<trace_exporter::OStreamSpanExporter>();
-    auto processor = std::make_unique<sdktrace::BatchSpanProcessor>(std::move(console_exporter), bspOpts);
+//Faulty IO helpers:
 
-  	resource::ResourceAttributes attributes = {
-        {resource::SemanticConventions::kServiceName, "fs-faulty-IO"},
-        {resource::SemanticConventions::kHostName, "local-host"}
-    };
-	auto resource = resource::Resource::Create(attributes);
-    auto provider = std::make_shared<sdktrace::TracerProvider>(std::move(processor), resource);
-    auto nostd_provider = opentelemetry::nostd::shared_ptr<trace::TracerProvider>(provider);
-
-  	// Set the global trace provider
-  	trace::Provider::SetTracerProvider(nostd_provider);
-  
-  
-  
-  trace_sdk::BatchSpanProcessorOptions bspOpts{};
-  opentelemetry::exporter::otlp::OtlpGrpcExporterOptions opts;
-  opts.endpoint = "localhost:4317"; //need jaeger endpoint
-  opts.use_ssl_credentials = true;
-  opts.ssl_credentials_cacert_as_string = "ssl-certificate";
-  auto exporter  = otlp::OtlpGrpcExporterFactory::Create(opts);
-  auto processor = trace_sdk::BatchSpanProcessorFactory::Create(std::move(exporter), bspOpts);
-  resource::ResourceAttributes attributes = {
-		{resource::SemanticConventions::kServiceName, "fs-faulty-IO"},
-		{resource::SemanticConventions::kHostName, "local-host"}
-	};
-	auto resource = resource::Resource::Create(attributes);
-
-  std::shared_ptr<opentelemetry::trace_api::TracerProvider> provider =
-      trace_sdk::TracerProviderFactory::Create(std::move(processor));
-  // Set the global trace provider
-  trace_api::Provider::SetTracerProvider(provider);
-  
-}
-
-void InitLogger(){
-  otlp::OtlpGrpcLogRecordExporterOptions opts;
-  opts.endpoint = "localhost:4317"; //also jaeger endpoint
-  opts.use_ssl_credentials = true;
-  opts.ssl_credentials_cacert_as_string = "ssl-certificate";
-  auto exporter  = otlp::OtlpGrpcLogRecordExporterFactory::Create(opts);
-  auto processor = logs_sdk::SimpleLogRecordProcessorFactory::Create(std::move(exporter));
-  nostd::shared_ptr<logs_api::LoggerProvider> provider(
-      logs_sdk::LoggerProviderFactory::Create(std::move(processor)));
-  logs_api::Provider::SetLoggerProvider(provider);
-}
-
-void traceAndSpan(const std::string& whereFault){
-        if(!otel_is_init){
-                otel_init();
-                otel_is_init = true;
-        }
-        // Start tracing
-    auto tracer = opentelemetry::trace::Provider::GetTracerProvider()->GetTracer("my_file_system_tracer");
-    auto span = tracer->StartSpan(whereFault); //span is associated with one IO operation which could have more than one fault 
-        //after an operation calls this function it must also call "span->End();"
-        //span->AddEvent("event_name", {{"key", "value"}});
-        //span->SetAttribute("attribute_key", "attribute_value");
-}
-
-void logFault(const std::string& faultType) {
-    // Log fault
-    auto logger = opentelemetry::logs::Provider::GetLogger("my_file_system_logger");
-    logger->Log("Fault simulated", {{"fault_type", faultType}, {"timestamp", getCurrentTimestamp()}});
-
-    // End tracing
-    //span->End();//do this in fs function calls after all logs have been sent.
-}
-*/
-
-//Helper functions for logging errors:
-/*
-//Otel init
-bool otel_is_init = false;
-void otel_init(){
-	auto exporter = std::make_shared<opentelemetry::exporter::otlp::OtlpGrpcLogExporter>();
-    auto processor = std::make_shared<opentelemetry::sdk::logs::SimpleLogProcessor>(exporter);
-    auto provider = std::make_shared<opentelemetry::sdk::logs::LoggerProvider>();
-    provider->AddProcessor(processor);
-    opentelemetry::logs::Provider::SetLoggerProvider(provider);
-
-    return 0;
-}
-
-// Function to get the current timestamp
-std::string getCurrentTime(){
-    auto now = std::chrono::system_clock::now();
-    std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
-    std::stringstream ss;
-    ss << std::put_time(std::localtime(&currentTime), "%Y-%m-%d %H:%M:%S");
-    return ss.str();//returns formatted string of timestamp
-}
-
-// Function to log an error using OpenTelemetry
-void logError(const std::string &error_message){
-	if(!otel_is_init){
-		otel_init();
-		otel_is_init = true;
+//Rand seeding logic
+bool rand_is_init = false;
+void init_random_seed(){
+	if(CONFIGSEED){
+		if(!rand_is_init){//seed with seednum when mounted
+    		srand(static_cast<unsigned>(SEEDNUM));//custom seed if user wants to control/if they want consistency
+			rand_is_init = true;
+		}
+	}else{
+		if(!rand_is_init){//Seed randomly when mounted
+    		srand(static_cast<unsigned>(time(nullptr)));
+			rand_is_init = true;
+		}
 	}
-	// Get the otel logger
-    auto logger_provider = opentelemetry::logs::Provider::GetLoggerProvider();
-    auto logger = logger_provider->GetLogger("faulty_fs-logger");
-
-    // Log an error with a timestamp
-    logger->EmitLogRecord(opentelemetry::logs::Severity::kError, getCurrentTime() + ": " + error_message);
-	return;
 }
-*/
+
 //local file logging
 void log_error(const char *error_message, std::string file_name,fuse_ino_t ino){
     // Open the file in append mode ("a"), creates it if it doesn't exist
@@ -422,8 +340,8 @@ void log_error(const char *error_message, std::string file_name,fuse_ino_t ino){
     // Close the file
     fclose(file);
 }
-/*
-void log_error_fh(const char *error_message, const char *file_name, fuse_ino_t ino, fuse_file_info *fi){
+
+void log_alert(const char *error_message, const char *file_name, fuse_ino_t ino){//alert used for debug, to print to a file since cout doesnt work
     // Open the file in append mode ("a"), creates it if it doesn't exist
     FILE *file = fopen(file_name, "a");
 
@@ -441,30 +359,11 @@ void log_error_fh(const char *error_message, const char *file_name, fuse_ino_t i
     strftime(time_buffer, sizeof(time_buffer), "%Y-%m-%d %H:%M:%S", timeinfo);// Format the time as: "YYYY-MM-DD HH:MM:SS"
 
     // Write the error message with a timestamp to the file
-    fprintf(file, "[%s] ALERT: %s. Inode: %ld; File Handler: %ld\n", time_buffer, error_message, ino, fi->fh);
+    fprintf(file, "[%s] ALERT: %s. Inode: %ld\n", time_buffer, error_message, ino);
 
     // Close the file
     fclose(file);
 }
-
-*/
-
-//Faulty IO helpers
-bool rand_is_init = false;
-void init_random_seed(){
-	if(CONFIGSEED){
-		if(!rand_is_init){//seed with seednum when mounted
-    		srand(static_cast<unsigned>(SEEDNUM));//custom seed if user wants to control/if they want consistency
-			rand_is_init = true;
-		}
-	}else{
-		if(!rand_is_init){//Seed randomly when mounted
-    		srand(static_cast<unsigned>(time(nullptr)));
-			rand_is_init = true;
-		}
-	}
-}
-
 
 static struct lo_data *lo_data(fuse_req_t req)
 {
@@ -538,13 +437,6 @@ static void lo_getattr(fuse_req_t req, fuse_ino_t ino,
 	if (res == -1){
 		return (void) fuse_reply_err(req, errno);
 	}
-	// init_random_seed();
-	// //faulty attribute return
-	// if (rand() % FAILRATE == 0) { // Example: 10% probability 
-    //     fuse_reply_attr(req, nullptr, 0); // Return null attributes and timeout
-	// 	log_error("lo_getattr: No attributes returned", ERRLOGFILE);
-    //     return; // Exit early 
-    // }
 
 	fuse_reply_attr(req, &buf, lo->timeout);
 }
@@ -557,14 +449,6 @@ static void lo_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 	struct lo_inode *inode = lo_inode(req, ino);
 	int ifd = inode->fd;
 	int res;
-
-	// init_random_seed();
-	// //simulate fault
-	// if (rand() % FAILRATE == 0) { // Example: 20% probability 
-    //     fuse_reply_err(req, EIO); // Return a generic I/O error
-	// 	log_error("lo_setattr: No attributes set", ERRLOGFILE);
-    //     return; // Exit early
-    // }
 
 	if (valid & FUSE_SET_ATTR_MODE) {
 		if (fi) {
@@ -944,27 +828,51 @@ static void lo_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi
 	struct lo_dirp *d;
 	int fd;
 
-	d = static_cast<struct lo_dirp *>(calloc(1, sizeof(struct lo_dirp)));
-	if (d == nullptr)
-		goto out_err;
+	if (rand() % DFAILRATE == 0) {  // Example: 10% probability of error
+		log_error("lo_opendir: An unexpected failure occurred", ERRLOGFILE, ino); 
+        //otel span 
+		auto span = traceAndSpan("faulty_lo_opendir");
+		span->SetAttribute("Operation", "directory.open");
+		span->SetAttribute("inode_number", (ino));
+		span->AddEvent("Abrupt Exit Simulated", {{"Timestamp", getCurrentTime()}, {"error_type", "ENOENT"}});
+		span->End();
+		file_handle->flush();
+		fuse_reply_err(req, ENOENT);//simulates space was too full to flush
+		return; // Exit the function early after sending the error
+    }else{
+		d = static_cast<struct lo_dirp *>(calloc(1, sizeof(struct lo_dirp)));
+		if (d == nullptr)
+			goto out_err;
 
-	fd = openat(lo_fd(req, ino), ".", O_RDONLY);
-	if (fd == -1)
-		goto out_errno;
+		fd = openat(lo_fd(req, ino), ".", O_RDONLY);
+		if (fd == -1)
+			goto out_errno;
 
-	d->dp = fdopendir(fd);
-	if (d->dp == nullptr)
-		goto out_errno;
+		d->dp = fdopendir(fd);
+		if (d->dp == nullptr)
+			goto out_errno;
 
-	d->offset = 0;
-	d->entry = nullptr;
+		d->offset = 0;
+		d->entry = nullptr;
 
-	fi->fh = (uintptr_t) d;
-	if (lo->cache == CACHE_ALWAYS)
-		fi->cache_readdir = 1;
-	fuse_reply_open(req, fi);
-	return;
+		fi->fh = (uintptr_t) d;
+		if (lo->cache == CACHE_ALWAYS) fi->cache_readdir = 1;
+		
+		//simulate delayed io
+		if (rand() % DFAILRATE == 0) {  // Example: 10% probability of delay
+			sleep(DELAYTIME); // Delay for DELAYTIME seconds
+			log_error("lo_opendir: An unexpected delay occurred", ERRLOGFILE, ino);
+			auto span = traceAndSpan("faulty_lo_opendir");
+			span->SetAttribute("Operation", "directory.open");
+			span->SetAttribute("inode_number", (ino));
+			span->AddEvent("Delayed Opendir Simulated", {{"Timestamp", getCurrentTime()}, {"delay_time", DELAYTIME}});
+			span->End();
+			file_handle->flush();//flush ostream_out.txt buffer
+		}
 
+		fuse_reply_open(req, fi);
+		return;
+	}
 out_errno:
 	error = errno;
 out_err:
@@ -991,76 +899,104 @@ static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 	size_t rem = size;
 	int err;
 
-	(void) ino;
+	//simulate failed io
+	if (rand() % DFAILRATE == 0) {  // Example: 10% probability of error
+		log_error("lo_do_readdir: An unexpected failure occurred", ERRLOGFILE, ino); 
+        //otel span 
+		auto span = traceAndSpan("faulty_lo_do_readdir");
+		span->SetAttribute("Operation", "directory.read");
+		span->SetAttribute("Dir_offset", (offset));
+		span->SetAttribute("inode_number", (ino));
+		span->AddEvent("Abrupt Exit Simulated", {{"Timestamp", getCurrentTime()}, {"error_type", "EIO"}});
+		span->End();
+		file_handle->flush();
+		fuse_reply_err(req, EIO);
+		return; // Exit the function early after sending the error
+    }else{
 
-	buf = static_cast<char *>(calloc(1, size));
-	if (!buf) {
-		err = ENOMEM;
-		goto error;
-	}
-	p = buf;
+		//simulate delayed io
+		if (rand() % DFAILRATE == 0) {  // Example: 10% probability of delay
+			sleep(DELAYTIME); // Delay for DELAYTIME seconds
+			log_error("lo_do_readdir: An unexpected delay occurred", ERRLOGFILE, ino);
+			auto span = traceAndSpan("faulty_lo_do_readdir");
+			span->SetAttribute("Operation", "directory.read");
+			span->SetAttribute("Dir_offset", (offset));
+			span->SetAttribute("inode_number", (ino));
+			span->AddEvent("Delayed Directory Read Simulated", {{"Timestamp", getCurrentTime()}, {"delay_time", DELAYTIME}});
+			span->End();
+			file_handle->flush();//flush ostream_out.txt buffer
+		}	
+	
+		buf = static_cast<char *>(calloc(1, size));
+		if (!buf) {
+			err = ENOMEM;
+			goto error;
+		}
+		p = buf;
 
-	if (offset != d->offset) {
-		seekdir(d->dp, offset);
-		d->entry = nullptr;
-		d->offset = offset;
-	}
-	while (1) {
-		size_t entsize;
-		off_t nextoff;
-		const char *name;
+		if (offset != d->offset) {
+			seekdir(d->dp, offset);
+			d->entry = nullptr;
+			d->offset = offset;
+		}
+		while (1) {
+			size_t entsize;
+			off_t nextoff;
+			const char *name;
 
-		if (!d->entry) {
-			errno = 0;
-			d->entry = readdir(d->dp);
 			if (!d->entry) {
-				if (errno) {  // Error
-					err = errno;
-					goto error;
-				} else {  // End of stream
-					break; 
+				errno = 0;
+				d->entry = readdir(d->dp);
+				if (!d->entry) {
+					if (errno) {  // Error
+						err = errno;
+						goto error;
+					} else {  // End of stream
+						break; 
+					}
 				}
 			}
-		}
-		nextoff = d->entry->d_off;
-		name = d->entry->d_name;
-		fuse_ino_t entry_ino = 0;
-		if (plus) {
-			struct fuse_entry_param e;
-			if (is_dot_or_dotdot(name)) {
-				e.attr.st_ino = d->entry->d_ino;
-    			e.attr.st_mode = d->entry->d_type << 12;
+			nextoff = d->entry->d_off;
+			name = d->entry->d_name;
+			fuse_ino_t entry_ino = 0;
+			if (plus) {
+				struct fuse_entry_param e;
+				if (is_dot_or_dotdot(name)) {
+					e.attr.st_ino = d->entry->d_ino;
+					e.attr.st_mode = d->entry->d_type << 12;
+				} else {
+					err = lo_do_lookup(req, ino, name, &e);
+					if (err)
+						goto error;
+					entry_ino = e.ino;
+				}
+
+				entsize = fuse_add_direntry_plus(req, p, rem, name,
+								&e, nextoff);
 			} else {
-				err = lo_do_lookup(req, ino, name, &e);
-				if (err)
-					goto error;
-				entry_ino = e.ino;
+				struct stat st = {
+					.st_ino = d->entry->d_ino,
+					.st_mode = static_cast<unsigned int>(d->entry->d_type << 12),
+				};
+				entsize = fuse_add_direntry(req, p, rem, name,
+								&st, nextoff);
 			}
+			if (entsize > rem) {
+				if (entry_ino != 0) 
+					lo_forget_one(req, entry_ino, 1);
+				break;
+			}
+			
+			p += entsize;
+			rem -= entsize;
 
-			entsize = fuse_add_direntry_plus(req, p, rem, name,
-							 &e, nextoff);
-		} else {
-			struct stat st = {
-				.st_ino = d->entry->d_ino,
-				.st_mode = static_cast<unsigned int>(d->entry->d_type << 12),
-			};
-			entsize = fuse_add_direntry(req, p, rem, name,
-						    &st, nextoff);
+			d->entry = nullptr;
+			d->offset = nextoff;
 		}
-		if (entsize > rem) {
-			if (entry_ino != 0) 
-				lo_forget_one(req, entry_ino, 1);
-			break;
-		}
-		
-		p += entsize;
-		rem -= entsize;
 
-		d->entry = nullptr;
-		d->offset = nextoff;
+		err = 0;
+
 	}
-
-    err = 0;
 error:
     // If there's an error, we can only signal it if we haven't stored
     // any entries yet - otherwise we'd end up with wrong lookup
@@ -1151,52 +1087,77 @@ static void lo_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	char buf[64];
 	struct lo_data *lo = lo_data(req);
 
-	if (lo_debug(req))
-		fuse_log(FUSE_LOG_DEBUG, "lo_open(ino=%" PRIu64 ", flags=%d)\n",
-			ino, fi->flags);
+	if (rand() % FFAILRATE == 0) {  // Example: 10% probability of error
+		log_error("lo_open: An unexpected failure occurred", ERRLOGFILE, ino); 
+        //otel span 
+		auto span = traceAndSpan("faulty_lo_open");
+		span->SetAttribute("Operation", "file.open");
+		span->SetAttribute("inode_number", (ino));
+		span->AddEvent("Abrupt Exit Simulated", {{"Timestamp", getCurrentTime()}, {"error_type", "ENOENT"}});
+		span->End();
+		file_handle->flush();
+		fuse_reply_err(req, ENOENT);//simulates space was too full to flush
+		return; // Exit the function early after sending the error
+    }else{
+		if (lo_debug(req))
+			fuse_log(FUSE_LOG_DEBUG, "lo_open(ino=%" PRIu64 ", flags=%d)\n",
+				ino, fi->flags);
 
-	//simulate abrupt exit
+		//simulate abrupt exit
 
-	/* With writeback cache, kernel may send read requests even
-	   when userspace opened write-only */
-	if (lo->writeback && (fi->flags & O_ACCMODE) == O_WRONLY) {
-		fi->flags &= ~O_ACCMODE;
-		fi->flags |= O_RDWR;
+		/* With writeback cache, kernel may send read requests even
+		when userspace opened write-only */
+		if (lo->writeback && (fi->flags & O_ACCMODE) == O_WRONLY) {
+			fi->flags &= ~O_ACCMODE;
+			fi->flags |= O_RDWR;
+		}
+
+		/* With writeback cache, O_APPEND is handled by the kernel.
+		This breaks atomicity (since the file may change in the
+		underlying filesystem, so that the kernel's idea of the
+		end of the file isn't accurate anymore). In this example,
+		we just accept that. A more rigorous filesystem may want
+		to return an error here */
+		if (lo->writeback && (fi->flags & O_APPEND))
+			fi->flags &= ~O_APPEND;
+
+		sprintf(buf, "/proc/self/fd/%i", lo_fd(req, ino));
+		fd = open(buf, fi->flags & ~O_NOFOLLOW);
+		if (fd == -1)
+			return (void) fuse_reply_err(req, errno);
+
+		fi->fh = fd;
+		
+		if (lo->cache == CACHE_NEVER)
+			fi->direct_io = 1;
+		else if (lo->cache == CACHE_ALWAYS)
+			fi->keep_cache = 1;
+
+			/* Enable direct_io when open has flags O_DIRECT to enjoy the feature
+			parallel_direct_writes (i.e., to get a shared lock, not exclusive lock,
+		for writes to the same file in the kernel). */
+		if (fi->flags & O_DIRECT)
+			fi->direct_io = 1;
+
+		/* parallel_direct_writes feature depends on direct_io features.
+		To make parallel_direct_writes valid, need set fi->direct_io
+		in current function. */
+		fi->parallel_direct_writes = 1;
+		
+		//simulate delayed io
+		if (rand() % FFAILRATE == 0) {  // Example: 10% probability of delay
+			sleep(DELAYTIME); // Delay for DELAYTIME seconds
+			log_error("lo_open: An unexpected delay occurred", ERRLOGFILE, ino);
+			auto span = traceAndSpan("faulty_lo_open");
+			span->SetAttribute("Operation", "file.open");
+			span->SetAttribute("inode_number", (ino));
+			span->AddEvent("Delayed Open Simulated", {{"Timestamp", getCurrentTime()}, {"delay_time", DELAYTIME}});
+			span->End();
+			file_handle->flush();//flush ostream_out.txt buffer
+		}
+
+		fuse_reply_open(req, fi);
 	}
-
-	/* With writeback cache, O_APPEND is handled by the kernel.
-	   This breaks atomicity (since the file may change in the
-	   underlying filesystem, so that the kernel's idea of the
-	   end of the file isn't accurate anymore). In this example,
-	   we just accept that. A more rigorous filesystem may want
-	   to return an error here */
-	if (lo->writeback && (fi->flags & O_APPEND))
-		fi->flags &= ~O_APPEND;
-
-	sprintf(buf, "/proc/self/fd/%i", lo_fd(req, ino));
-	fd = open(buf, fi->flags & ~O_NOFOLLOW);
-	if (fd == -1)
-		return (void) fuse_reply_err(req, errno);
-
-	fi->fh = fd;
-	
-	if (lo->cache == CACHE_NEVER)
-		fi->direct_io = 1;
-	else if (lo->cache == CACHE_ALWAYS)
-		fi->keep_cache = 1;
-
-        /* Enable direct_io when open has flags O_DIRECT to enjoy the feature
-        parallel_direct_writes (i.e., to get a shared lock, not exclusive lock,
-	for writes to the same file in the kernel). */
-	if (fi->flags & O_DIRECT)
-		fi->direct_io = 1;
-
-	/* parallel_direct_writes feature depends on direct_io features.
-	   To make parallel_direct_writes valid, need set fi->direct_io
-	   in current function. */
-	fi->parallel_direct_writes = 1;
-	//simulate dfelay
-	fuse_reply_open(req, fi);
 }
 
 static void lo_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
@@ -1209,10 +1170,33 @@ static void lo_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi
 
 static void lo_flush(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-	int res;
-	(void) ino;
-	res = close(dup(fi->fh));
-	fuse_reply_err(req, res == -1 ? errno : 0);
+	if (rand() % FFAILRATE == 0) {  // Example: 10% probability of error
+		log_error("lo_flush: An unexpected failure occurred", ERRLOGFILE, ino); 
+        //otel span 
+		auto span = traceAndSpan("faulty_lo_flush");
+		span->SetAttribute("Operation", "file.flush");
+		span->SetAttribute("inode_number", (ino));
+		span->AddEvent("Abrupt Exit Simulated", {{"Timestamp", getCurrentTime()}, {"error_type", "ENOSPC"}});
+		span->End();
+		file_handle->flush();
+		fuse_reply_err(req, ENOSPC);//simulates space was too full to flush
+		return; // Exit the function early after sending the error
+    }else{
+		int res;
+		res = close(dup(fi->fh));
+		//simulate delayed io
+		if (rand() % FFAILRATE == 0) {  // Example: 10% probability of delay
+			sleep(DELAYTIME); // Delay for DELAYTIME seconds
+			log_error("lo_flush: An unexpected delay occurred", ERRLOGFILE, ino);
+			auto span = traceAndSpan("faulty_lo_flush");
+			span->SetAttribute("Operation", "file.flush");
+			span->SetAttribute("inode_number", (ino));
+			span->AddEvent("Delayed Flush Simulated", {{"Timestamp", getCurrentTime()}, {"delay_time", DELAYTIME}});
+			span->End();
+			file_handle->flush();//flush ostream_out.txt buffer
+		}
+		fuse_reply_err(req, res == -1 ? errno : 0);
+	}
 }
 
 static void lo_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
@@ -1225,13 +1209,6 @@ static void lo_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 	}else{
 		res = fsync(fi->fh);
 	}
-	// init_random_seed();
-	// //Simulate failure
-	// if (rand() % FAILRATE == 0) {  // Example: 10% probability
-    //     fuse_reply_err(req, EIO); // Return a generic I/O error
-	// 	log_error("lo_fsync: An unexpected failure occurred", ERRLOGFILE);
-    //     return; // Exit early 
-    // }
 	fuse_reply_err(req, res == -1 ? errno : 0);
 }
 
@@ -1242,7 +1219,7 @@ static void lo_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 	int is_faulty = 0;
 
 	//simulate failed io
-	if (rand() % FAILRATE == 0) {  // Example: 10% probability of error
+	if (rand() % FFAILRATE == 0) {  // Example: 10% probability of error
 		log_error("lo_read: An unexpected failure occurred", ERRLOGFILE, ino); 
         //otel span 
 		auto span = traceAndSpan("faulty_lo_read");
@@ -1263,14 +1240,14 @@ static void lo_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 		}
 
 		//simulate delayed io
-		if (rand() % FAILRATE == 0) {  // Example: 10% probability of delay
+		if (rand() % FFAILRATE == 0) {  // Example: 10% probability of delay
 			sleep(DELAYTIME); // Delay for DELAYTIME seconds
 			log_error("lo_read: An unexpected delay occurred", ERRLOGFILE, ino);
 			is_faulty += 1;
 		}
 
 		//simulate truncated read
-		if (rand() % FAILRATE == 0) { // 10% probability of a short read
+		if (rand() % FFAILRATE == 0) { // 10% probability of a short read
 			buf.buf[0].size = rand() % 10 + 5;//truncated size between 5-15
 			buf.buf[0].flags = static_cast<fuse_buf_flags>(FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK);
 			buf.buf[0].fd = fi->fh;
@@ -1315,7 +1292,7 @@ static void lo_write_buf(fuse_req_t req, fuse_ino_t ino,
 	int is_faulty = 0;
 
 	//simulate IO error
-	if (rand() % FAILRATE == 0) {  // Example: 10% probability of error
+	if (rand() % FFAILRATE == 0) {  // Example: 10% probability of error
 		log_error("lo_write_buf: An unexpected failure occurred", ERRLOGFILE, ino);
         //otel span
 		auto span = traceAndSpan("faulty_lo_write");
@@ -1344,14 +1321,14 @@ static void lo_write_buf(fuse_req_t req, fuse_ino_t ino,
 			fuse_reply_err(req, -res);
 		else{
 			//simulate delayed io
-			if (rand() % FAILRATE == 0) {  // Example: 10% probability of delay
+			if (rand() % FFAILRATE == 0) {  // Example: 10% probability of delay
 				sleep(DELAYTIME); // Delay for 5 seconds
 				log_error("lo_write_buf: An unexpected delay occurred", ERRLOGFILE, ino);
 				is_faulty += 1;
 			}
 
 			//simulate truncated write
-			if (rand() % FAILRATE == 0) {
+			if (rand() % FFAILRATE == 0) {
 				res = res / 2;	//buf size cut in half
 				log_error("lo_write_buf: Truncated write occurred", ERRLOGFILE, ino);
 				is_faulty += 2;
@@ -1679,7 +1656,8 @@ void config_faulty(std::string config_path) {
     if (config.contains("faultyIO")) {
         auto configFaulty = config["faultyIO"];
 		if(configFaulty.contains("local_log_path")) ERRLOGFILE = configFaulty["local_log_path"];
-		if(configFaulty.contains("fail_rate")) FAILRATE = configFaulty["fail_rate"];
+		if(configFaulty.contains("file_fail_rate")) FFAILRATE = configFaulty["file_fail_rate"];
+		if(configFaulty.contains("directory_fail_rate")) DFAILRATE = configFaulty["directory_fail_rate"];
 		if(configFaulty.contains("use_seednum")) SEEDNUM = configFaulty["use_seednum"];
 		if(configFaulty.contains("seed")) SEEDNUM = configFaulty["seed"];
 		if(configFaulty.contains("delay_time")) DELAYTIME = configFaulty["delay_time"];
