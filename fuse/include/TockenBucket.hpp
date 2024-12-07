@@ -14,7 +14,7 @@
 #include <iostream>
 #include <cstring>
 
-const size_t tokenTroughput = 1 << 13;
+const size_t tokenTroughput = 1 << 10;
 const uint64_t initialtoken = 1 << 5;
 
 class TokenBucket {

@@ -1,0 +1,61 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: fio-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: fio-throttled-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+kind: Job
+apiVersion: batch/v1
+metadata:
+  name: fio-throttled
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: fio-throttled
+          image: docker.io/library/alpine:edge
+          command:
+            - sh
+            - -c
+            - |
+              set -euxo pipefail
+              apk add fio
+              fio --filename=/data/test \
+                --size=10M --rw=randrw --bs=4k --runtime=10 --time_based --name=regular
+              fio --filename=/data-throttled/test \
+                --size=10M --rw=randrw --bs=4k --runtime=10 --time_based --name=throttled
+          volumeMounts:
+            - mountPath: "/data"
+              name: data
+            - mountPath: "/data-throttled"
+              name: data-throttled
+      volumes:
+        - name: data
+          csi:
+            driver: interposer.csi.example.com
+            volumeAttributes:
+              persistentVolumeClaimName: fio-pvc
+        - name: data-throttled
+          csi:
+            driver: interposer.csi.example.com
+            volumeAttributes:
+              persistentVolumeClaimName: fio-throttled-pvc
+              throttleIO: "true"
