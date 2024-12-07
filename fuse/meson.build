@@ -54,6 +54,7 @@ executable(
   'include/otel.cpp',
   'include/workload_tracing.cpp',
   'include/metric_collection.cpp',
+  'include/fault_injection.cpp',
   'include/config_parser.cpp',
   cpp_args : '-DHAVE_UTIMENSAT',
   dependencies: [thread, fuse, ot_dep, proto_dep, grpc_dep, prom_dep],
