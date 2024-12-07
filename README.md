@@ -74,13 +74,18 @@ The command would take a while.
 Example workloads are provided in the `examples` folder, they can be run with kubectl:
 
 ```shell
+# run individual examples
 kubectl apply -f examples/minio.yaml
+# run all of them
+kubectl apply -k examples/
 ```
 
 Progress of the job can be checked with:
 
 ```shell
 kubectl get jobs.batch
+# or watch their progress
+kubectl get jobs.batch --watch
 ```
 
 And the following commands can be used to forward the jaeger and grafana dashboard to a local port:
