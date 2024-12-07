@@ -90,6 +90,8 @@ And the following commands can be used to forward the jaeger and grafana dashboa
 kubectl -n csi-interposer port-forward services/grafana-service 3000:3000
 # jaeger
 kubectl -n csi-interposer port-forward services/jaeger-default-query 16686:16686
+# prometheus
+kubectl -n prometheus port-forward services/prometheus-server 8080:80
 ```
 
 ## Project Description
