@@ -4,6 +4,16 @@ use std::str::FromStr;
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct MetricsConfig {
     pub enabled: bool,
+    #[serde(rename = "readCounter")]
+    pub read_counter: bool,
+    #[serde(rename = "writeCounter")]
+    pub write_counter: bool,
+    #[serde(rename = "readLatencyHist")]
+    pub read_latency_hist: bool,
+    #[serde(rename = "writeLatencyHist")]
+    pub write_latency_hist: bool,
+    #[serde(rename = "dirCounter")]
+    pub dir_counter: bool,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -62,6 +72,11 @@ impl Config {
         FuseConfig {
             metrics: MetricsConfig {
                 enabled: self.metrics,
+                read_counter: true,
+                write_counter: true,
+                read_latency_hist: true,
+                write_latency_hist: true,
+                dir_counter: true,
             },
             traces: TracesConfig {
                 enabled: self.traces,
