@@ -4,6 +4,7 @@
 #include "include/passthrough_hp.hpp"
 #include "include/workload_tracing.hpp"
 #include "include/metric_collection.hpp"
+#include "include/fault_injection.hpp"
 #include "include/otel.hpp"
 #include "include/config_parser.hpp"
 
@@ -34,6 +35,12 @@ int main(int argc, char *argv[]) {
     if (addTraces) {
         tracing_oper = tracing_operations(*lastLayer);
         lastLayer = &tracing_oper;
+    }
+
+    fuse_lowlevel_ops fault_oper;
+    if (addFaultyIO) {
+        fault_oper = fault_operations(*lastLayer);
+        lastLayer = &fault_oper;
     }
 
     return setup_fuse(argc, argv, *lastLayer);
