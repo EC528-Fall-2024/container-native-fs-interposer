@@ -16,7 +16,13 @@
         "otelEndpt": "localhost:4317"
     },
     "faultyIO": {
-        "enabled": false
+        "enabled": false,
+        "local_log_path": "usr/src/myapp/testmount/error_log.txt",
+        "file_fail_rate": 6,
+        "directory_fail_rate": 6,
+        "use_seednum": false,
+        "seed": 0,
+        "delay_time": 3
     },
     "throttleIO": {
         "enabled": false
