@@ -27,6 +27,62 @@ static void fault_init(void *userdata, struct fuse_conn_info *conn)
 	fault_next->init(userdata, conn);
 }
 
+static void fault_write_buf(fuse_req_t req, fuse_ino_t ino,
+                         struct fuse_bufvec *in_buf, off_t off,
+                         struct fuse_file_info *fi)
+{
+        ssize_t res;
+
+        int is_faulty = 0;
+
+        //simulate IO error
+        if (rand() % FFAILRATE == 0) {  // Example: 10% probability of error
+                log_error("lo_write_buf: An unexpected failure occurred", ERRLOGFILE, ino);
+        //otel span
+                auto span = traceAndSpan("faulty_lo_write");
+                span->SetAttribute("Operation", "file.write");
+                span->SetAttribute("File_offset", (off));
+                span->SetAttribute("inode_number", (ino));
+                span->AddEvent("Abrupt Exit Simulated", {{"Timestamp", getCurrentTime()}, {"error_type", "EIO"}});
+                span->End();
+                file_handle->flush();
+                fuse_reply_err(req, EIO);
+                return; // Exit the function early after sending the error
+    }else{
+                //simulate delayed io
+                if (rand() % FFAILRATE == 0) {  // Example: 10% probability of delay
+                        sleep(DELAYTIME); // Delay for 5 seconds
+                        log_error("lo_write_buf: An unexpected delay occurred", ERRLOGFILE, ino);
+                        is_faulty += 1;
+                }
+
+                //simulate truncated write
+                if (rand() % FFAILRATE == 0) {
+                        res = res / 2;  //buf size cut in half // FIXME
+                        log_error("lo_write_buf: Truncated write occurred", ERRLOGFILE, ino);
+                        is_faulty += 2;
+                }
+
+                fault_next->write_buf(req, ino, in_buf, off, fi);
+        }
+        if(is_faulty){
+                auto span = traceAndSpan("faulty_lo_write");
+                span->SetAttribute("Operation", "file.write");
+                span->SetAttribute("File_offset", (off));
+                span->SetAttribute("inode_number", (ino));
+                if(is_faulty % 2){//if %2 it means first fault happened
+                        span->AddEvent("Delayed Write Simulated", {{"Timestamp", getCurrentTime()}, {"delay_time", DELAYTIME}});
+                        is_faulty -=1;
+                }
+                if(is_faulty % 4){
+                        span->AddEvent("Truncated Write Simulated", {{"Timestamp", getCurrentTime()}, {"size", static_cast<int>(res)}});
+                        is_faulty -= 2;
+                }
+                span->End();
+                file_handle->flush();
+        }
+}
+
 fuse_lowlevel_ops fault_operations(fuse_lowlevel_ops &next) {
   // Configs
   json config = getConfig("./config/config.json");
