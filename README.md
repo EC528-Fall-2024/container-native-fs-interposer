@@ -33,8 +33,8 @@ If you choose not to install nix, you can pull the prebuilt image from ghcr.io.
 
 ```shell
 docker login ghcr.io # login using your github username and personal access token
-docker pull ghcr.io/ec528-fall-2024/container-native-fs-interposer/csi-plugin:v0.0.4
-docker tag ghcr.io/ec528-fall-2024/container-native-fs-interposer/csi-plugin:v0.0.4 docker.io/library/csi-node:latest
+docker pull ghcr.io/ec528-fall-2024/container-native-fs-interposer/csi-plugin:v0.0.5
+docker tag ghcr.io/ec528-fall-2024/container-native-fs-interposer/csi-plugin:v0.0.5 docker.io/library/csi-node:latest
 ```
 
 #### 3. helm and helmfile
