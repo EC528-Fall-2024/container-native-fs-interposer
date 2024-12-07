@@ -77,17 +77,16 @@ target_link_libraries(foo PRIVATE ${OPENTELEMETRY_CPP_LIBRARIES}
 #include "./include/config_parser.hpp"
 
 #include "libfuse/passthrough_helpers.h"
+#include "faulty_ll.hpp"
 
 //#include <opentelemetry/exporters/otlp/otlp_grpc_exporter.h>
-//#include <opentelemetry/exporters/otlp/otlp_grpc_exporter_factory.h>
 //#include <opentelemetry/exporters/otlp/otlp_grpc_exporter_options.h>
-//#include <opentelemetry/exporters/otlp/otlp_grpc_log_record_exporter.h>
-//#include <opentelemetry/exporters/otlp/otlp_grpc_log_record_exporter_factory.h>
-//#include <opentelemetry/exporters/otlp/otlp_grpc_log_record_exporter_options.h>
+
 #include <opentelemetry/exporters/ostream/span_exporter_factory.h>
 #include <opentelemetry/exporters/ostream/span_exporter.h>
 #include <opentelemetry/nostd/shared_ptr.h>
 #include <opentelemetry/sdk/resource/semantic_conventions.h>
+#include <opentelemetry/sdk/resource/resource.h>
 #include <opentelemetry/sdk/trace/exporter.h>
 #include <opentelemetry/sdk/trace/processor.h>
 #include <opentelemetry/sdk/trace/simple_processor_factory.h>
@@ -101,8 +100,7 @@ target_link_libraries(foo PRIVATE ${OPENTELEMETRY_CPP_LIBRARIES}
 #include <opentelemetry/trace/scope.h>
 #include <opentelemetry/trace/span.h>
 #include <opentelemetry/trace/tracer_provider.h>
-//#include <opentelemetry/sdk/logs/simple_log_processor.h>
-//#include <opentelemetry/sdk/logs/log_record.h>
+
 #include <opentelemetry/sdk/logs/logger_provider.h>
 #include <opentelemetry/logs/provider.h>
 #include <opentelemetry/logs/logger.h>
@@ -205,6 +203,8 @@ int DFAILRATE = 0; //likelihood of directory failure
 bool CONFIGSEED = 0; //user can set configseed to one and it will use default value 0 or they can choose their own seed by setting seednum
 int SEEDNUM = 0; //default 0 user can change
 int DELAYTIME = 3;
+
+static fuse_lowlevel_ops *faulty_next;
 
 // OTEL helper functions:
 namespace trace = opentelemetry::trace;
@@ -1664,6 +1664,21 @@ void config_faulty(std::string config_path) {
 		if(configFaulty.contains("delay_time")) DELAYTIME = configFaulty["delay_time"];
     }
 	return;
+}
+
+fuse_lowlevel_ops faulty_operations(fuse_lowlevel_ops &next) {
+	faulty_next = &next;
+
+	fuse_lowlevel_ops curr = next;
+	curr.read = lo_read;
+	curr.write_buf = lo_write_buf;
+	curr.flush = lo_flush;
+	curr.readdir = lo_readdir;
+	curr.readdirplus = lo_readdirplus;
+	curr.open = lo_open;
+	curr.opendir = lo_opendir;
+
+	return curr;
 }
 
 int main(int argc, char *argv[])
