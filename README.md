@@ -104,7 +104,7 @@ kubectl -n prometheus port-forward services/prometheus-server 8080:80
 
 ## 1.   Vision and Goals Of The Project:
 
-The goal of our project is to integrate FUSE file systems within the container-native environment Kubernetes, which is commonly used for deploying cloud-based applications. By leveraging the FUSE library, which provides the mechanisms and API for implementing file systems in user space, we aim to develop file systems with various testing utilities for Kubernetes applications. These utilities include workload tracing, workload metric collection, faulty I/O, throttle I/O, and fake I/O.
+The goal of our project is to integrate FUSE file systems within the container-native environment Kubernetes, which is commonly used for deploying cloud-based applications. By leveraging the FUSE library, which provides the mechanisms and API for implementing file systems in user space, we aim to develop file systems with various testing utilities for Kubernetes applications. These utilities include workload tracing, workload metric collection, faulty I/O, and throttle I/O.
 
 ## 2. Users/Personas Of The Project:
 
@@ -176,22 +176,27 @@ The users of this project is anyone who is developing in or managing a cloud env
 
 ## 4. Solution Concept
 
+Applications are now often deployed in container-native environments, such as Kubernetes. Often, developers would like to observe and test the application through its underlying file system. This project entails wrapping that underlying file system with utility layers implemented with FUSE. The utilities provide observability, fault injection, and throttling the I/O.
+
+In Kubernetes, storage is provided to workloads (“pods”) via volumes (“persistent volumes, PVs”) that are usually formatted with a file system such as ext4 or xfs.  To use a FUSE-based stackable utility file system with these volumes and workloads, some integration with Kubernetes is required. This integration will be implemented by a CSI node plugin.
+
+The FUSE library provides a mechanism and an API for implementing full-fledged file systems in user space, which makes developing a new file system significantly easier and safer compared to kernel based file systems. This also enables quick development of various “utility” file systems that layer on top of other file systems to add new functionalities.  For example, a file system that injects random errors to evaluate applications’ error handling, a file system that logs activity for later analysis or playback, or a file system that throttles I/O operations for quality of service (QoS) purposes or reducing the load on backend. A user request (i.e., system call) would travel from the userspace to the virtual file system (VFS) and subsequently the FUSE kernel module. FUSE then forwards these I/O requests to the handler, which is a utility FUSE implementation.
+
 ### Global Architectural Structure of the Project
 
-The following diagram shows the general architecture of our project. The upper half of the diagram represents the user space, while the lower half represents the kernel space. The architecture demonstrates the integration of two systems, FUSE and Kubernetes, through a CSI plugin.
+The following diagram shows the general architecture of our project. The application, deployed in Kubernetes, would send I/O requests to the interposer binary, our FUSE file system implementation, which then forwards that request to the backing volume. The interposer binary takes in a configuration file that allows the user to enable or disable four utilities: workload tracing, metric collection, faulty I/O, and throttle I/O.
+The binary is instrumented with OpenTelemetry's Metrics and Traces API. The metrics and traces, if enabled in the configuration file, are exported to and collected by a Promeetheus and Jaeger backend, respectively. Finally, the data is displayed in a Grafana dashboard. 
 
 <p align="center">
-<img src="./images/overallDiagram.png" width="50%">
+<img src="./images/architecture.png" width="50%">
 </p>
 <p align="center">
 Diagram 1: General Architecture of Project
 </p>
 
-The FUSE library provides a mechanism and an API for implementing full-fledged file systems in user space, which makes developing a new file system significantly easier and safer compared to kernel based file systems. This also enables quick development of various “utility” file systems that layer on top of other file systems to add new functionalities.  For example, a file system that injects random errors to evaluate applications’ error handling, a file system that logs activity for later analysis or playback, or a file system that throttles I/O operations for quality of service (QoS) purposes or reducing the load on backend. The diagram above illustrates a request (i.e., system call) from userspace to the virtual file system (VFS) and subsequently the FUSE kernel module. FUSE then forwards these IO requests to the handler, which is our utility FUSE implementation. 
-
-Applications are now often deployed in container native environments, such as Kubernetes.  In Kubernetes, storage is provided to workloads (“pods”) via volumes (“persistent volumes, PVs”) that are usually formatted with a file system such as ext4 or xfs.  To use a FUSE-based stackable utility file system with these volumes and workloads, some integration with Kubernetes is required. As shown in the diagram, this integration will be implemented by a CSI node plugin.
-
 #### Architecture of the CSI plugin
+
+CSI, or Container Storage Interface, defines a set of interfaces that allows storage systems to expose their services to containerized environments. A CSI plugin is an implementation of the CSI that enable containers to provision and mount volumes. This plugin allows the application deployed in Kubernetes to interface with our FUSE utility file system.
 
 ##### Generic CSI Architecture
 ![](./images/csi-arch-rev1.png)
@@ -208,7 +213,7 @@ Applications are now often deployed in container native environments, such as Ku
 
 1. Create a new CSI plugin for Kubernetes that allows users to mount a stackable FUSE-based file system over another file system.
 
-2. Implement utility FUSE file systems that provide workload tracing, workload metric collection, faulty I/O, throttle I/O, and fake IO.
+2. Implement utility FUSE file systems that provide workload tracing, workload metric collection, faulty I/O, and throttle I/O.
 
 3. Run experiments with several data-intensive applications using the 2 technologies above. Perform descriptive analysis of applications’ behavior when a utility file system is used.
 
